@@ -1,5 +1,5 @@
 export const environment = {
   production: true,
-  apiUrl: '/api',
-  nasaTlxStartUrl: 'http://localhost:4201/start'
+  apiUrl: 'https://beyondai-backend.onrender.com/api',
+  nasaTlxStartUrl: 'https://beyondai-nasa-tlx.vercel.app/start'
 };

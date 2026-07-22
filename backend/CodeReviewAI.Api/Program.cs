@@ -2,6 +2,7 @@ using CodeReviewAI.Api.Endpoints;
 using CodeReviewAI.Api.Middleware;
 using CodeReviewAI.Api.Services;
 using CodeReviewAI.Api.Services.GitHub;
+using Microsoft.Extensions.Configuration.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,14 @@ if (!string.IsNullOrEmpty(port))
 {
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 }
+
+// Disable appsettings.json hot-reload watchers. The default host wires up a
+// FileSystemWatcher (inotify) per JSON config file; constrained containers (e.g. Render's
+// free tier) can have a very low per-container inotify instance limit, which crashes the
+// app on startup with "The configured user limit (128) on the number of inotify instances
+// has been reached". Hot-reload isn't needed anyway — config changes require a redeploy.
+foreach (var source in builder.Configuration.Sources.OfType<JsonConfigurationSource>())
+    source.ReloadOnChange = false;
 
 builder.Services.AddCors(options =>
 {
