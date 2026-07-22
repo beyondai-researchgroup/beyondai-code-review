@@ -2,8 +2,14 @@ using CodeReviewAI.Api.Endpoints;
 using CodeReviewAI.Api.Middleware;
 using CodeReviewAI.Api.Services;
 using CodeReviewAI.Api.Services.GitHub;
-using Microsoft.Extensions.Configuration.Json;
 
+// appsettings.json hot-reload is disabled via a "--hostBuilder:reloadConfigOnChange=false"
+// command-line argument in the Dockerfile ENTRYPOINT, not here — WebApplicationBuilder's
+// ConfigurationManager adds and *builds* the JSON sources (starting their FileSystemWatcher)
+// synchronously inside CreateBuilder(args) below, so mutating source.ReloadOnChange
+// afterwards is too late. Constrained containers (e.g. Render's free tier) can have a very
+// low per-container inotify instance limit, and that watcher crashes the app on startup with
+// "The configured user limit (128) on the number of inotify instances has been reached".
 var builder = WebApplication.CreateBuilder(args);
 
 // Render (and most non-IIS hosts) inject the port to listen on via $PORT rather than
@@ -14,14 +20,6 @@ if (!string.IsNullOrEmpty(port))
 {
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 }
-
-// Disable appsettings.json hot-reload watchers. The default host wires up a
-// FileSystemWatcher (inotify) per JSON config file; constrained containers (e.g. Render's
-// free tier) can have a very low per-container inotify instance limit, which crashes the
-// app on startup with "The configured user limit (128) on the number of inotify instances
-// has been reached". Hot-reload isn't needed anyway — config changes require a redeploy.
-foreach (var source in builder.Configuration.Sources.OfType<JsonConfigurationSource>())
-    source.ReloadOnChange = false;
 
 builder.Services.AddCors(options =>
 {

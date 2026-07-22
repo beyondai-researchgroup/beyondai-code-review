@@ -16,4 +16,7 @@ WORKDIR /app
 COPY --from=build /app/publish .
 
 ENV ASPNETCORE_ENVIRONMENT=Production
-ENTRYPOINT ["dotnet", "CodeReviewAI.Api.dll"]
+
+# Disables the appsettings.json FileSystemWatcher (inotify) — see the comment above
+# `WebApplication.CreateBuilder` in Program.cs for why this must be a CLI arg, not code.
+ENTRYPOINT ["dotnet", "CodeReviewAI.Api.dll", "--hostBuilder:reloadConfigOnChange=false"]
