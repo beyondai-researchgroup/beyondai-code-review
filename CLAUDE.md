@@ -196,6 +196,81 @@ in-memory `ReviewSession` and were lost on decision-submit/session-delete or bac
   resubmitting a decision for the same participant+session updated the existing row instead of
   duplicating it.
 
+### Public deployment (2026-07-22)
+
+Both apps are publicly hosted under a dedicated `beyondai-researchgroup` GitHub account (kept
+separate from the developer's personal accounts — nothing in the public deployment should point
+back to a personal identity). Source of truth is now these two repos, pushed from the local
+working copies:
+- `https://github.com/beyondai-researchgroup/beyondai-code-review` (this repo — backend + frontend)
+- `https://github.com/beyondai-researchgroup/beyondai-nasa-tlx`
+
+**Live URLs:**
+- BeyondAI frontend (Vercel): `https://beyondai-code-review.vercel.app`
+- BeyondAI backend (Render, Docker): `https://beyondai-backend.onrender.com`
+- NASA-TLX (Vercel): `https://beyondai-nasa-tlx.vercel.app`
+
+**Backend on Render:**
+- `Dockerfile` + `.dockerignore` at the repo root (build context = root, so paths inside are
+  `backend/CodeReviewAI.Api/...`); multi-stage build on `mcr.microsoft.com/dotnet/sdk:10.0` /
+  `aspnet:10.0`.
+- Secrets (`GitHub__PersonalAccessToken`, `Anthropic__ApiKey`, `Study__DatabaseUrl`,
+  `Study__Pr__Owner/Repo/Number`, `Study__TestParticipantIds__0`, `Cors__AllowedOrigins__0`) are
+  Render environment variables — **not** committed anywhere (`appsettings.json` keeps empty
+  defaults, exactly as in local dev via user-secrets).
+- `Program.cs` reads `$PORT` (Render's injected listen port) via `builder.WebHost.UseUrls(...)`
+  when present; local dev is unaffected since launchSettings.json profiles never set `$PORT`.
+- CORS is config-driven: `Cors:AllowedOrigins` (plus the always-allowed loopback origins for local
+  dev) — add a Vercel URL there (as a Render env var, `Cors__AllowedOrigins__N`) whenever a new
+  frontend origin needs to call this API.
+- **Known container gotcha, already fixed**: the default ASP.NET host wires up a
+  `FileSystemWatcher` (inotify) per `appsettings*.json` file for hot-reload. Render's free-tier
+  containers have a very low inotify-instance limit, so the app crashed on startup with
+  `IOException: The configured user limit (128) on the number of inotify instances has been
+  reached`. `WebApplicationBuilder`'s `ConfigurationManager` builds JSON sources — and starts
+  their watcher — **synchronously inside `CreateBuilder(args)`**, before any code in `Program.cs`
+  runs, so disabling `ReloadOnChange` in code is too late. The fix had to be a bootstrap-time
+  setting: the Dockerfile `ENTRYPOINT` passes `--hostBuilder:reloadConfigOnChange=false` as a CLI
+  arg (Render's env-var UI rejects keys containing `:`, so this can't be set as a normal env var).
+- Render doesn't auto-trigger a build on `git push` reliably even with `autoDeploy: "yes"` — a
+  manual `POST /v1/services/{id}/deploys` (Render API) may be needed after pushing.
+
+**BeyondAI frontend on Vercel:**
+- Deployed via `vercel --prod` CLI directly from `frontend/` (no GitHub integration needed —
+  Vercel builds `ng build` zero-config from the Angular "application" builder's
+  `dist/frontend/browser` output).
+- `environment.prod.ts` hardcodes the production URLs (`apiUrl` → Render backend,
+  `nasaTlxStartUrl` → NASA-TLX Vercel URL) since Angular bakes environment files in at build time,
+  not runtime — there is no dashboard env var for these.
+
+**NASA-TLX on Vercel — the `/api/db/*` Express routes needed a rework:**
+- Vercel's zero-config Angular deployment **prerenders every route** (`angular.json`
+  `ssr.prerender: true`) and, since every route was statically prerenderable, Vercel decided no
+  Node server function was needed at all — it deployed a **fully static site**, silently dropping
+  every custom Express route defined inside `server.ts`'s `app()` (`/api/db/participant/:id`,
+  `/api/db/result`, `/api/db/session-finished`, `/api/db/export`). Requests to those paths just
+  hit the SPA fallback (200 with `index.html`, or 405 for POST). This was **not** a build error —
+  it took a `vercel build` (local Build Output API v3 inspection) to see `config.json` had zero
+  entries under `functions/`.
+- Fix: moved the DB endpoints to **standalone Vercel serverless functions** under `/api/db/*.ts`
+  (Vercel's first-class, always-deployed convention — independent of whatever the Angular
+  framework preset decides about SSR/prerendering). Shared validation/DB logic lives in
+  `api/_lib/db.ts`; `server.ts` (still used for local dev via `npm run serve:db`) now imports the
+  same module instead of duplicating it.
+- Two more container/runtime gotchas hit along the way, both fixed:
+  1. `api/package.json` with `{"type": "module"}` — needed because the repo root `package.json`
+     has no `"type"` field (defaults to CommonJS), but Vercel compiles `/api/*.ts` to ESM `.js`;
+     Node's nearest-`package.json` rule means this file only affects `/api`, not the Angular build.
+  2. All relative imports under `/api` need an explicit `.js` extension
+     (`from '../../_lib/db.js'`, not `'../../_lib/db'`) — Node's strict ESM resolver (unlike
+     CommonJS `require`) doesn't infer extensions, and Vercel's per-function build doesn't rewrite
+     bare specifiers.
+- `DATABASE_URL` is a Vercel project environment variable (production + preview), set via the
+  Vercel API — a redeploy is needed after changing it for a Node function to pick it up.
+- Verified live end-to-end after the fix: `/api/db/participant/001` → `{"exists":true}`,
+  `/api/db/session-finished` → correct 400/404/200 per case, full BeyondAI → NASA-TLX handoff
+  through a real browser run with zero console errors.
+
 ### Next planned improvements
 - Add a `UserSecretsId` reminder to the README / onboarding docs
 - Persist session ID in `sessionStorage` so a browser refresh reconnects to the same session
