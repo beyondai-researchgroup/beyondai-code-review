@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="CodeReviewAI.Api/CodeReviewAI.Api.csproj" />
+  <Project Path="CodeReviewAI.Tests/CodeReviewAI.Tests.csproj" />
+</Solution>

@@ -1,0 +1,107 @@
+<div class="loader-card">
+  <div class="loader-brand">
+    <img [src]="logoSrc()" alt="BeyondAI logo" class="loader-logo" aria-hidden="true">
+    <h1 class="loader-title">BeyondAI</h1>
+    <p class="loader-subtitle">Code Review Assistant</p>
+  </div>
+
+  <h1 class="title">{{ t().loaderTitle }}</h1>
+  <p class="subtitle">{{ t().loaderSubtitle }}</p>
+
+  @if (errorMessage()) {
+    <div class="error-banner" role="alert">
+      {{ errorMessage() }}
+    </div>
+  }
+
+  @if (allDone()) {
+    <div class="done-banner" role="status">
+      ✓ {{ t().studyAllDone }}
+    </div>
+  }
+
+  @if (step() === 'login') {
+    <form (ngSubmit)="login()" novalidate>
+      <div class="field">
+        <label for="participantId">{{ t().studyParticipantLabel }}</label>
+        <input
+          id="participantId"
+          type="text"
+          name="participantId"
+          [ngModel]="participantId()"
+          (ngModelChange)="participantId.set($event); onIdInput()"
+          [placeholder]="t().studyParticipantPlaceholder"
+          autocomplete="off"
+          maxlength="50"
+        />
+      </div>
+
+      <div class="field">
+        <label>{{ t().studyLangLabel }}</label>
+        <div class="lang-cards">
+          <button
+            type="button"
+            class="lang-card"
+            [class.lang-card--active]="i18n.lang() === 'sr'"
+            (click)="setLang('sr')"
+          >SR — Srpski</button>
+          <button
+            type="button"
+            class="lang-card"
+            [class.lang-card--active]="i18n.lang() === 'en'"
+            (click)="setLang('en')"
+          >EN — English</button>
+        </div>
+      </div>
+
+      <button type="submit" class="submit-btn" [disabled]="loading()">
+        @if (loading()) {
+          <span class="spinner" aria-hidden="true"></span>
+          {{ t().loading }}
+        } @else {
+          {{ t().studyLogin }}
+        }
+      </button>
+    </form>
+  } @else {
+    <div class="session-badge">
+      {{ t().studySessionLabel }}: <strong>{{ sessionName() }}</strong>
+      <span class="session-badge__id mono">{{ participantId() }}</span>
+    </div>
+    <p class="choose-hint">{{ t().studyChooseMode }}</p>
+
+    <div class="field">
+      <div class="mode-cards">
+        <button
+          type="button"
+          class="mode-card"
+          [class.mode-card--active]="selectedMode() === ReviewMode.Ai"
+          (click)="selectedMode.set(ReviewMode.Ai)"
+        >
+          <span class="mode-card__icon">💬</span>
+          <span class="mode-card__title">{{ t().modeAiTitle }}</span>
+          <span class="mode-card__desc">{{ t().modeAiDesc }}</span>
+        </button>
+        <button
+          type="button"
+          class="mode-card"
+          [class.mode-card--active]="selectedMode() === ReviewMode.Report"
+          (click)="selectedMode.set(ReviewMode.Report)"
+        >
+          <span class="mode-card__icon">📄</span>
+          <span class="mode-card__title">{{ t().modeReportTitle }}</span>
+          <span class="mode-card__desc">{{ t().modeReportDesc }}</span>
+        </button>
+      </div>
+    </div>
+
+    <button type="button" class="submit-btn" [disabled]="loading()" (click)="start()">
+      @if (loading()) {
+        <span class="spinner" aria-hidden="true"></span>
+        {{ t().loading }}
+      } @else {
+        {{ t().studyStart }}
+      }
+    </button>
+  }
+</div>

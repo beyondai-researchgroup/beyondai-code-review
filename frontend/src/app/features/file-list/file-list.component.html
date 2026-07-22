@@ -1,0 +1,69 @@
+<div class="file-list">
+
+  <!-- ── Top half: changed files ─────────────────────────────────────────── -->
+  <div class="section-files">
+    <h2 class="panel-title">{{ t().changedFiles }}</h2>
+
+    <div class="repo-ctx-bar">
+      @switch (repoCtxState()) {
+        @case ('loading') {
+          <span class="repo-ctx-status repo-ctx-status--loading">
+            <span class="repo-ctx-spinner"></span>{{ t().repoContextLoading }}
+          </span>
+        }
+        @case ('loaded') {
+          <span class="repo-ctx-status repo-ctx-status--loaded">✓ {{ t().repoContextLoaded }}</span>
+        }
+        @case ('error') {
+          <span class="repo-ctx-status repo-ctx-status--error">⚠ {{ t().repoContextError }}</span>
+        }
+      }
+    </div>
+
+    @if (files().length === 0) {
+      <p class="empty">{{ t().noChangedFiles }}</p>
+    }
+    <ul class="list">
+      @for (file of files(); track file.fileName) {
+        <li
+          class="file-item"
+          [class.file-item--selected]="file.fileName === selectedFileName()"
+          (click)="selectFile(file.fileName)"
+        >
+          <div class="file-name" [title]="file.fileName">{{ file.fileName }}</div>
+          <div class="file-meta">
+            <span [ngClass]="badgeClass(file.status)">{{ badgeLabel(file.status) }}</span>
+            <span class="additions">+{{ file.additions }}</span>
+            <span class="deletions">-{{ file.deletions }}</span>
+          </div>
+        </li>
+      }
+    </ul>
+  </div>
+
+  <!-- ── Bottom half: summary ────────────────────────────────────────────── -->
+  <div class="section-summary">
+    <h3 class="summary-title">{{ t().summary }}</h3>
+    <div class="summary-body">
+      @if (shortSummary()) {
+        <p class="summary-text">{{ shortSummary() }}</p>
+      } @else {
+        <p class="summary-text summary-text--empty">{{ t().prDescriptionEmpty }}</p>
+      }
+      <button
+        class="show-desc-link"
+        type="button"
+        [class.show-desc-link--active]="descriptionActive()"
+        (click)="descriptionClicked.emit()"
+      >{{ t().showFullDescription }}</button>
+    </div>
+  </div>
+
+  <!-- ── Decision button ─────────────────────────────────────────────────── -->
+  <div class="section-finish">
+    <button class="finish-btn" type="button" (click)="finishClicked.emit()">
+      {{ t().finish }}
+    </button>
+  </div>
+
+</div>

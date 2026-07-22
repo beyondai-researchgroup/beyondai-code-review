@@ -1,0 +1,19 @@
+# .NET
+backend/**/bin/
+backend/**/obj/
+*.user
+
+# Node / Angular (frontend has its own .gitignore for build output, kept here for safety)
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Local tooling / editor
+.claude/
+.vs/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

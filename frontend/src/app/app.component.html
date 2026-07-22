@@ -1,0 +1,150 @@
+<div class="app-shell">
+
+  <header class="workspace-header">
+    <div class="header-left">
+      <div class="nav-brand">
+        <img [src]="logoSrc()" alt="BeyondAI logo" class="nav-logo" aria-hidden="true">
+        <span class="nav-title">BeyondAI</span>
+      </div>
+      @if (sessionId()) {
+        <span class="pr-title">{{ prTitle() }}</span>
+      }
+    </div>
+    <div class="header-controls">
+
+      <div class="toggle-group" [attr.aria-label]="'Tema'">
+        <button
+          class="toggle-group__btn"
+          type="button"
+          [class.toggle-group__btn--active]="themeService.theme() === 'dark'"
+          (click)="setTheme('dark')"
+          title="Tamna tema / Dark theme"
+        >☾</button>
+        <button
+          class="toggle-group__btn"
+          type="button"
+          [class.toggle-group__btn--active]="themeService.theme() === 'light'"
+          (click)="setTheme('light')"
+          title="Svetla tema / Light theme"
+        >☀</button>
+      </div>
+
+      <!-- Language toggle disabled for the study flow: the language is chosen once
+           on the study login page and locked. Re-enable by uncommenting if needed.
+      <div class="toggle-group" [attr.aria-label]="'Jezik / Language'">
+        <button
+          class="toggle-group__btn"
+          type="button"
+          [class.toggle-group__btn--active]="i18n.lang() === 'sr'"
+          (click)="setLang('sr')"
+        >SR</button>
+        <button
+          class="toggle-group__btn"
+          type="button"
+          [class.toggle-group__btn--active]="i18n.lang() === 'en'"
+          (click)="setLang('en')"
+        >EN</button>
+      </div>
+      -->
+
+    </div>
+  </header>
+
+  @if (!sessionId()) {
+    <div class="landing-body">
+      <!-- Study flow: participants log in with their ID only; the original
+           <app-pr-loader /> (repo/PR/token form) is kept in the codebase unused. -->
+      <app-study-login (prLoaded)="onPrLoaded($event)" />
+    </div>
+  } @else {
+    <div class="workspace-body" [class.workspace-body--with-diff]="hasDiff()">
+
+      <aside
+        class="file-panel"
+        [style.flex-basis.%]="leftWidth()"
+        [class.panel--collapsed]="fileListCollapsed()"
+      >
+        <button
+          class="panel-toggle panel-toggle--end"
+          type="button"
+          (click)="fileListCollapsed.set(!fileListCollapsed())"
+          [title]="fileListCollapsed() ? t().expandFileList : t().collapseFileList"
+        >{{ fileListCollapsed() ? '›' : '‹' }}</button>
+        <app-file-list
+          [files]="prFiles()"
+          [sessionId]="sessionId()!"
+          [shortSummary]="prShortSummary()"
+          [descriptionActive]="showDescription()"
+          (fileSelected)="onFileSelected($event)"
+          (descriptionClicked)="onShowDescription()"
+          (finishClicked)="openFinishModal()"
+        />
+      </aside>
+
+      @if (hasDiff()) {
+        <div class="resize-handle" (mousedown)="onResizeStart('left', $event)"></div>
+
+        <section
+          class="diff-panel"
+          [style.flex-basis.%]="midWidth()"
+          [class.panel--collapsed]="diffCollapsed()"
+        >
+          <button
+            class="panel-toggle panel-toggle--end"
+            type="button"
+            (click)="diffCollapsed.set(!diffCollapsed())"
+            [title]="diffCollapsed() ? t().expandDiff : t().collapseDiff"
+          >{{ diffCollapsed() ? '›' : '‹' }}</button>
+          @if (showDescription()) {
+            <app-pr-description
+              [title]="prTitle()"
+              [author]="prAuthor()"
+              [headBranch]="prHeadBranch()"
+              [baseBranch]="prBaseBranch()"
+              [description]="prDescription()"
+            />
+          } @else {
+            <app-diff-viewer
+              [sessionId]="sessionId()!"
+              [fileName]="selectedFileName()"
+              [quotingEnabled]="reviewMode() === ReviewMode.Ai"
+              (quote)="onQuoteToChat($event)"
+            />
+          }
+        </section>
+
+        <div class="resize-handle" (mousedown)="onResizeStart('mid', $event)"></div>
+      } @else {
+        <div class="resize-handle" (mousedown)="onResizeStart('left', $event)"></div>
+      }
+
+      <main
+        class="chat-panel"
+        [style.flex-basis.%]="chatWidth()"
+        [class.panel--collapsed]="chatCollapsed()"
+      >
+        <button
+          class="panel-toggle panel-toggle--start"
+          type="button"
+          (click)="chatCollapsed.set(!chatCollapsed())"
+          [title]="chatCollapsed() ? t().expandChat : t().collapseChat"
+        >{{ chatCollapsed() ? '‹' : '›' }}</button>
+        @if (reviewMode() === ReviewMode.Report) {
+          <app-report-view [sessionId]="sessionId()!" />
+        } @else {
+          <app-chat #chatRef [sessionId]="sessionId()!" />
+        }
+      </main>
+
+    </div>
+  }
+
+</div>
+
+@if (showFinishModal() && sessionId()) {
+  <app-finish-review-modal
+    [sessionId]="sessionId()!"
+    (closed)="onModalClosed()"
+    (decisionSubmitted)="onDecisionSubmitted($event)"
+  />
+}

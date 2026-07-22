@@ -1,0 +1,99 @@
+<div class="loader-card">
+  <div class="loader-brand">
+    <img [src]="logoSrc()" alt="BeyondAI logo" class="loader-logo" aria-hidden="true">
+    <h1 class="loader-title">BeyondAI</h1>
+    <p class="loader-subtitle">Code Review Assistant</p>
+  </div>
+
+  <h1 class="title">{{ t().loaderTitle }}</h1>
+  <p class="subtitle">{{ t().loaderSubtitle }}</p>
+
+  @if (errorMessage()) {
+    <div class="error-banner" role="alert">
+      {{ errorMessage() }}
+    </div>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <div class="field">
+      <label for="repoUrl">{{ t().repoUrlLabel }}</label>
+      <input
+        id="repoUrl"
+        type="url"
+        formControlName="repoUrl"
+        placeholder="https://github.com/owner/repo"
+        autocomplete="off"
+      />
+      @if (form.controls.repoUrl.invalid && form.controls.repoUrl.touched) {
+        <span class="field-error">{{ t().repoUrlError }}</span>
+      }
+    </div>
+
+    <div class="field">
+      <label for="prNumber">{{ t().prNumberLabel }}</label>
+      <input
+        id="prNumber"
+        type="number"
+        formControlName="prNumber"
+        placeholder="42"
+        min="1"
+      />
+      @if (form.controls.prNumber.invalid && form.controls.prNumber.touched) {
+        <span class="field-error">{{ t().prNumberError }}</span>
+      }
+    </div>
+
+    <div class="field">
+      <label for="token">{{ t().tokenLabel }}</label>
+      <input
+        id="token"
+        type="password"
+        formControlName="token"
+        placeholder="ghp_xxxxxxxxxxxx"
+        autocomplete="off"
+      />
+      @if (form.controls.token.invalid && form.controls.token.touched) {
+        <span class="field-error">{{ t().tokenError }}</span>
+      }
+    </div>
+
+    <div class="field">
+      <label>{{ t().modeLabel }}</label>
+      <div class="mode-cards">
+        <button
+          type="button"
+          class="mode-card"
+          [class.mode-card--active]="selectedMode() === ReviewMode.Ai"
+          (click)="selectedMode.set(ReviewMode.Ai)"
+        >
+          <span class="mode-card__icon">💬</span>
+          <span class="mode-card__title">{{ t().modeAiTitle }}</span>
+          <span class="mode-card__desc">{{ t().modeAiDesc }}</span>
+        </button>
+        <button
+          type="button"
+          class="mode-card"
+          [class.mode-card--active]="selectedMode() === ReviewMode.Report"
+          (click)="selectedMode.set(ReviewMode.Report)"
+        >
+          <span class="mode-card__icon">📄</span>
+          <span class="mode-card__title">{{ t().modeReportTitle }}</span>
+          <span class="mode-card__desc">{{ t().modeReportDesc }}</span>
+        </button>
+      </div>
+    </div>
+
+    <button
+      type="submit"
+      class="submit-btn"
+      [disabled]="loading()"
+    >
+      @if (loading()) {
+        <span class="spinner" aria-hidden="true"></span>
+        {{ t().loading }}
+      } @else {
+        {{ t().loadPr }}
+      }
+    </button>
+  </form>
+</div>

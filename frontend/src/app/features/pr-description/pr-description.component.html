@@ -1,0 +1,22 @@
+<div class="pr-desc">
+
+  <div class="pr-desc__header">
+    <h2 class="pr-desc__title">{{ title() }}</h2>
+    <div class="pr-desc__meta">
+      <span class="pr-desc__author">{{ author() }}</span>
+      <span class="pr-desc__sep">·</span>
+      <code class="pr-desc__branch">{{ headBranch() }}</code>
+      <span class="pr-desc__arrow">→</span>
+      <code class="pr-desc__branch">{{ baseBranch() }}</code>
+    </div>
+  </div>
+
+  <div class="pr-desc__body">
+    @if (description()) {
+      <markdown [data]="description()!" />
+    } @else {
+      <p class="pr-desc__empty">{{ t().prDescriptionEmpty }}</p>
+    }
+  </div>
+
+</div>

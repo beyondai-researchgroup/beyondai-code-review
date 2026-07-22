@@ -1,0 +1,75 @@
+<div class="modal-backdrop" (click)="close()">
+  <div class="modal-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t().finishModalTitle" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <h2 class="modal-title">{{ t().finishModalTitle }}</h2>
+      <button
+        class="modal-close"
+        type="button"
+        [disabled]="submitting()"
+        (click)="close()"
+        aria-label="Zatvori"
+      >✕</button>
+    </div>
+
+    <div class="modal-body">
+      <label class="modal-label" for="review-comment">
+        {{ t().finishModalCommentLabel }}
+      </label>
+      <div class="modal-textarea-wrap">
+        <textarea
+          #textarea
+          id="review-comment"
+          class="modal-textarea"
+          [placeholder]="t().finishModalCommentPlaceholder"
+          [value]="comment()"
+          (input)="comment.set($any($event.target).value)"
+          [disabled]="submitting()"
+          [attr.maxlength]="maxCommentLength"
+          rows="6"
+        ></textarea>
+        @if (comment().length > 0) {
+          <span
+            class="modal-char-counter"
+            [class.modal-char-counter--near-limit]="comment().length >= maxCommentLength * 0.9"
+          >{{ comment().length }}/{{ maxCommentLength }}</span>
+        }
+      </div>
+
+      @if (!canSubmit() && !submitting()) {
+        <p class="modal-hint">{{ t().finishModalHint }}</p>
+      }
+
+      @if (errorMessage()) {
+        <p class="modal-error" role="alert">{{ errorMessage() }}</p>
+      }
+
+      <div class="modal-actions">
+        <button
+          class="modal-btn modal-btn--accept"
+          type="button"
+          [disabled]="!canSubmit()"
+          (click)="submit(ReviewDecisionType.Accepted)"
+        >
+          @if (submittingDecision() === ReviewDecisionType.Accepted) {
+            <span class="modal-spinner" aria-hidden="true"></span>
+          }
+          {{ t().finishModalAccept }}
+        </button>
+
+        <button
+          class="modal-btn modal-btn--reject"
+          type="button"
+          [disabled]="!canSubmit()"
+          (click)="submit(ReviewDecisionType.Rejected)"
+        >
+          @if (submittingDecision() === ReviewDecisionType.Rejected) {
+            <span class="modal-spinner" aria-hidden="true"></span>
+          }
+          {{ t().finishModalReject }}
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,64 @@
+<div class="report-view">
+
+  @if (streaming() && !reportText()) {
+    <div class="report-view__loading">
+      <span class="report-view__spinner" aria-hidden="true"></span>
+      <span>{{ t().reportLoading }}</span>
+    </div>
+  } @else if (error()) {
+    <div class="report-view__error">
+      <span>{{ t().reportError }}</span>
+      <button class="report-view__retry-btn" type="button" (click)="retry()">
+        {{ t().reportRetry }}
+      </button>
+    </div>
+  } @else {
+    <div class="report-view__toolbar">
+      <div class="report-view__search">
+        <input
+          class="report-view__search-input"
+          type="text"
+          [value]="searchTerm()"
+          (input)="onSearchInput($any($event.target).value)"
+          (keydown)="onSearchKeydown($event)"
+          [placeholder]="t().searchPlaceholder"
+        />
+        @if (searchTerm()) {
+          <span class="report-view__search-count">
+            {{ matchCount() > 0 ? (currentMatchIndex() + 1) + '/' + matchCount() : t().searchNoMatches }}
+          </span>
+          <button
+            class="report-view__search-nav"
+            type="button"
+            [disabled]="matchCount() === 0"
+            (click)="prevMatch()"
+            aria-label="Prethodni rezultat"
+          >‹</button>
+          <button
+            class="report-view__search-nav"
+            type="button"
+            [disabled]="matchCount() === 0"
+            (click)="nextMatch()"
+            aria-label="Sledeći rezultat"
+          >›</button>
+          <button
+            class="report-view__search-clear"
+            type="button"
+            (click)="clearSearch()"
+            aria-label="Obriši pretragu"
+          >✕</button>
+        }
+      </div>
+    </div>
+
+    <div class="report-view__body">
+      <div class="report-view__content" #content>
+        <markdown [data]="reportText()" />
+      </div>
+      <p class="report-view__disclaimer">
+        ⚠️ {{ t().disclaimer }}
+      </p>
+    </div>
+  }
+
+</div>

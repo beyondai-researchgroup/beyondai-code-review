@@ -1,0 +1,237 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--file-panel-bg);
+}
+
+// ── Top half: file list ───────────────────────────────────────────────────────
+
+.section-files {
+  flex: 1 1 0;
+  min-height: 80px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--panel-title-color);
+  margin: 0 0 0.75rem;
+  padding: 1rem 1rem 0;
+  flex-shrink: 0;
+}
+
+.repo-ctx-bar {
+  padding: 0 1rem 0.75rem;
+  flex-shrink: 0;
+  min-height: 1.6rem;
+}
+
+.repo-ctx-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+
+  &--loading { color: var(--text-muted); }
+  &--loaded  { color: var(--accent); font-weight: 500; }
+  &--error   { color: var(--field-error-color); }
+}
+
+.repo-ctx-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty {
+  padding: 0 1rem;
+  color: var(--file-empty-color);
+  font-size: 0.875rem;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.file-item {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--file-item-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  cursor: pointer;
+  transition: background 0.1s;
+
+  &:hover {
+    background: var(--file-item-hover);
+  }
+
+  &--selected {
+    background: var(--file-item-selected-bg);
+    border-left: 3px solid var(--file-item-selected-border);
+    padding-left: calc(1rem - 3px);
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.file-name {
+  font-size: 0.8125rem;
+  font-family: 'Fira Code', 'Consolas', monospace;
+  color: var(--file-name-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  &--added    { background: var(--badge-added-bg);    color: var(--badge-added-text); }
+  &--modified { background: var(--badge-modified-bg); color: var(--badge-modified-text); }
+  &--removed  { background: var(--badge-removed-bg);  color: var(--badge-removed-text); }
+}
+
+.additions {
+  font-size: 0.75rem;
+  color: var(--additions-color);
+  font-weight: 500;
+}
+
+.deletions {
+  font-size: 0.75rem;
+  color: var(--deletions-color);
+  font-weight: 500;
+}
+
+// ── Bottom half: summary ──────────────────────────────────────────────────────
+
+.section-summary {
+  flex-shrink: 0;
+  max-height: 42%;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.summary-title {
+  margin: 0;
+  padding: 0.65rem 1rem 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--panel-title-color);
+  flex-shrink: 0;
+}
+
+.summary-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.summary-text {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+
+  &--empty {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+}
+
+.show-desc-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: color 0.15s, text-decoration-color 0.15s;
+
+  &:hover {
+    color: var(--btn-bg-hover);
+    text-decoration-color: currentColor;
+  }
+
+  &--active {
+    color: var(--btn-bg-hover);
+    text-decoration-color: currentColor;
+  }
+}
+
+// ── Decision button ───────────────────────────────────────────────────────────
+
+.section-finish {
+  flex-shrink: 0;
+  padding: 0.75rem 0.875rem;
+  border-top: 1px solid var(--border);
+}
+
+.finish-btn {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  background: var(--accent);
+  color: var(--btn-text);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover {
+    background: var(--btn-bg-hover);
+  }
+}

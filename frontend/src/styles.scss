@@ -1,0 +1,407 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* ── Theme variables ───────────────────────────────────────────────────────── */
+
+:root,
+[data-theme="dark"] {
+  /* Surfaces — deep teget, layered */
+  --bg-page:        #0f1923;
+  --bg-surface:     #16232f;
+  --bg-surface-alt: #1c2d3a;
+  --bg-header:      #0a1219;
+
+  /* Text — muted, easy on the eyes */
+  --text-primary:   #cfd8d0;
+  --text-secondary: #7a9e8a;
+  --text-muted:     #4a6a58;
+
+  /* Borders */
+  --border:        #1e3040;
+  --border-strong: #253c50;
+
+  /* Accent — forest green, not neon */
+  --accent:      #3d8a62;
+  --accent-dim:  #2d6e4e;
+  --accent-glow: rgba(61, 138, 98, 0.15);
+
+  /* Buttons */
+  --btn-bg:       #2d6e4e;
+  --btn-bg-hover: #3d8a62;
+  --btn-text:     #e8f4ee;
+  --btn-disabled: #1a3d2c;
+
+  /* Chat bubbles */
+  --bubble-user-bg:   #2d6e4e;
+  --bubble-user-text: #e8f4ee;
+  --bubble-ai-bg:     #1c2d3a;
+  --bubble-ai-text:   #cfd8d0;
+
+  /* Inputs */
+  --input-bg:          #16232f;
+  --input-border:      #1e3040;
+  --input-focus:       #3d8a62;
+  --input-disabled-bg: #0f1923;
+
+  /* Chips */
+  --chip-bg:           #16232f;
+  --chip-border:       #1e3040;
+  --chip-text:         #7a9e8a;
+  --chip-hover-bg:     #162b1e;
+  --chip-hover-border: #3d8a62;
+  --chip-hover-text:   #4aab78;
+
+  /* Disclaimer */
+  --disclaimer-bg:     #16232f;
+  --disclaimer-border: #1e3040;
+  --disclaimer-text:   #7a9e8a;
+
+  /* Panel collapse toggle */
+  --toggle-btn-bg:     #16232f;
+  --toggle-btn-border: #1e3040;
+  --toggle-btn-text:   #7a9e8a;
+
+  /* Header nav controls — dark bg context */
+  --header-text:               #cfd8d0;
+  --header-ctrl-color:         #4a6a58;
+  --header-ctrl-border:        #253c50;
+  --header-ctrl-hover-color:   #cfd8d0;
+  --header-ctrl-hover-border:  #3d8a62;
+  --header-ctrl-active-bg:     #2d6e4e;
+  --header-ctrl-active-color:  #e8f4ee;
+
+  /* Send button */
+  --send-btn-bg:    #2d6e4e;
+  --send-btn-hover: #3d8a62;
+  --send-btn-text:  #e8f4ee;
+
+  /* File list */
+  --file-panel-bg:             #16232f;
+  --file-item-border:          #1c2d3a;
+  --file-item-hover:           #1c2d3a;
+  --file-item-selected-bg:     #162b1e;
+  --file-item-selected-border: #3d8a62;
+  --file-name-color:           #cfd8d0;
+  --panel-title-color:         #4a6a58;
+  --file-empty-color:          #4a6a58;
+  --additions-color:           #5aab7a;
+  --deletions-color:           #a06060;
+
+  /* Badges */
+  --badge-added-bg:     #162b1e;
+  --badge-added-text:   #5aab7a;
+  --badge-removed-bg:   #2b1616;
+  --badge-removed-text: #a06060;
+  --badge-modified-bg:  #1e2316;
+  --badge-modified-text:#8a9e3d;
+
+  /* Diff viewer */
+  --diff-bg:           #0f1923;
+  --diff-header-bg:    #0a1219;
+  --diff-header-text:  #7a9e8a;
+  --diff-added-bg:     #162b1e;
+  --diff-added-text:   #5aab7a;
+  --diff-removed-bg:   #2b1616;
+  --diff-removed-text: #a06060;
+  --diff-hunk-bg:      #16232b;
+  --diff-hunk-text:    #4a7a9a;
+  --diff-context-bg:   #0f1923;
+  --diff-context-text: #4a6a58;
+  --state-msg-color:   #4a6a58;
+  --state-error-color: #a06060;
+
+  /* PR Loader */
+  --loader-bg:           #16232f;
+  --loader-title:        #cfd8d0;
+  --loader-subtitle:     #7a9e8a;
+  --loader-label:        #7a9e8a;
+  --loader-host-bg:      #0f1923;
+  --error-banner-bg:     #2b1616;
+  --error-banner-border: #5a2828;
+  --error-banner-text:   #c07070;
+  --field-error-color:   #c07070;
+
+  /* Code blocks inside AI bubble */
+  --code-block-bg:   #0a1219;
+  --code-block-text: #cfd8d0;
+  --inline-code-bg:  #1c2d3a;
+
+  /* Syntax highlighting (Prism) — code blocks always render on a dark
+     editor-style background, so token colors are shared in spirit
+     across both app themes and tuned for that dark backdrop. */
+  --code-token-comment:     #6a8f80;
+  --code-token-keyword:     #d99a4e;
+  --code-token-string:      #8fbc8f;
+  --code-token-number:      #6fa8dc;
+  --code-token-class:       #5fb3b3;
+  --code-token-function:    #e0c46c;
+  --code-token-variable:    #b8c4be;
+  --code-token-punctuation: #7a9e8a;
+  --code-token-tag:         #4aab78;
+
+  /* Scrollbar */
+  --scrollbar-track:       #0a1219;
+  --scrollbar-thumb:       #1e3040;
+  --scrollbar-thumb-hover: #3d8a62;
+}
+
+[data-theme="light"] {
+  /* Surfaces */
+  --bg-page:        #f2f7f4;
+  --bg-surface:     #ffffff;
+  --bg-surface-alt: #eaf2ec;
+  --bg-header:      #1a3a28;
+
+  /* Text */
+  --text-primary:   #1a2e1a;
+  --text-secondary: #374151;
+  --text-muted:     #6b7280;
+
+  /* Borders */
+  --border:        #c0dbc9;
+  --border-strong: #a8cdb5;
+
+  /* Accent */
+  --accent:      #16a34a;
+  --accent-dim:  #15803d;
+  --accent-glow: rgba(22, 163, 74, 0.15);
+
+  /* Buttons */
+  --btn-bg:       #16a34a;
+  --btn-bg-hover: #15803d;
+  --btn-text:     #ffffff;
+  --btn-disabled: #86efac;
+
+  /* Chat bubbles */
+  --bubble-user-bg:   #16a34a;
+  --bubble-user-text: #ffffff;
+  --bubble-ai-bg:     #eaf2ec;
+  --bubble-ai-text:   #1f2937;
+
+  /* Inputs */
+  --input-bg:          #ffffff;
+  --input-border:      #c0dbc9;
+  --input-focus:       #16a34a;
+  --input-disabled-bg: #f2f7f4;
+
+  /* Chips */
+  --chip-bg:           #ffffff;
+  --chip-border:       #c0dbc9;
+  --chip-text:         #374151;
+  --chip-hover-bg:     #f0fff4;
+  --chip-hover-border: #86efac;
+  --chip-hover-text:   #15803d;
+
+  /* Disclaimer */
+  --disclaimer-bg:     #f0fff4;
+  --disclaimer-border: #86efac;
+  --disclaimer-text:   #166534;
+
+  /* Panel collapse toggle */
+  --toggle-btn-bg:     #ffffff;
+  --toggle-btn-border: #c0dbc9;
+  --toggle-btn-text:   #374151;
+
+  /* Header nav controls — dark green header, so white text */
+  --header-text:               #ffffff;
+  --header-ctrl-color:         rgba(255, 255, 255, 0.55);
+  --header-ctrl-border:        rgba(255, 255, 255, 0.25);
+  --header-ctrl-hover-color:   #ffffff;
+  --header-ctrl-hover-border:  rgba(255, 255, 255, 0.65);
+  --header-ctrl-active-bg:     rgba(255, 255, 255, 0.18);
+  --header-ctrl-active-color:  #ffffff;
+
+  /* Send button */
+  --send-btn-bg:    #1a3a28;
+  --send-btn-hover: #2d5a3d;
+  --send-btn-text:  #ffffff;
+
+  /* File list */
+  --file-panel-bg:             #ffffff;
+  --file-item-border:          #f3f4f6;
+  --file-item-hover:           #f0f5f2;
+  --file-item-selected-bg:     #dcfce7;
+  --file-item-selected-border: #16a34a;
+  --file-name-color:           #1f2937;
+  --panel-title-color:         #6b7280;
+  --file-empty-color:          #9ca3af;
+  --additions-color:           #16a34a;
+  --deletions-color:           #dc2626;
+
+  /* Badges */
+  --badge-added-bg:     #d1fae5;
+  --badge-added-text:   #065f46;
+  --badge-removed-bg:   #fee2e2;
+  --badge-removed-text: #991b1b;
+  --badge-modified-bg:  #fef3c7;
+  --badge-modified-text:#92400e;
+
+  /* Diff viewer */
+  --diff-bg:           #ffffff;
+  --diff-header-bg:    #f6f8fa;
+  --diff-header-text:  #24292f;
+  --diff-added-bg:     #e6ffec;
+  --diff-added-text:   #1a7f37;
+  --diff-removed-bg:   #ffebe9;
+  --diff-removed-text: #cf222e;
+  --diff-hunk-bg:      #ddf4ff;
+  --diff-hunk-text:    #0550ae;
+  --diff-context-bg:   #ffffff;
+  --diff-context-text: #57606a;
+  --state-msg-color:   #57606a;
+  --state-error-color: #cf222e;
+
+  /* PR Loader */
+  --loader-bg:           #ffffff;
+  --loader-title:        #1a1a1a;
+  --loader-subtitle:     #666666;
+  --loader-label:        #374151;
+  --loader-host-bg:      #f5f5f5;
+  --error-banner-bg:     #fef2f2;
+  --error-banner-border: #fca5a5;
+  --error-banner-text:   #dc2626;
+  --field-error-color:   #dc2626;
+
+  /* Code blocks inside AI bubble */
+  --code-block-bg:   #1e1e1e;
+  --code-block-text: #d4d4d4;
+  --inline-code-bg:  #e5e7eb;
+
+  /* Syntax highlighting (Prism) — same dark-editor-tuned palette as the
+     dark theme, since code blocks keep a dark background here too. */
+  --code-token-comment:     #6a8f80;
+  --code-token-keyword:     #d99a4e;
+  --code-token-string:      #8fbc8f;
+  --code-token-number:      #6fa8dc;
+  --code-token-class:       #5fb3b3;
+  --code-token-function:    #e0c46c;
+  --code-token-variable:    #b8c4be;
+  --code-token-punctuation: #7a9e8a;
+  --code-token-tag:         #4aab78;
+
+  /* Scrollbar */
+  --scrollbar-track:       #e8f0eb;
+  --scrollbar-thumb:       #b0cfba;
+  --scrollbar-thumb-hover: #16a34a;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  color: var(--text-primary);
+  background: var(--bg-page);
+}
+
+/* ── Syntax highlighting (Prism) ───────────────────────────────────────────── */
+/* Global on purpose: Prism's generated <span class="token ..."> markup shows up
+   inside ngx-markdown output across several components (chat, report view, PR
+   description), so the rules live here once instead of being duplicated per
+   component ::ng-deep block. */
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: var(--code-token-comment);
+  font-style: italic;
+}
+
+.token.punctuation {
+  color: var(--code-token-punctuation);
+}
+
+.token.namespace {
+  opacity: 0.7;
+}
+
+.token.property,
+.token.constant,
+.token.symbol,
+.token.deleted,
+.token.boolean,
+.token.number {
+  color: var(--code-token-number);
+}
+
+.token.selector,
+.token.class-name,
+.token.builtin {
+  color: var(--code-token-class);
+}
+
+.token.tag,
+.token.attr-name {
+  color: var(--code-token-tag);
+}
+
+.token.string,
+.token.char,
+.token.attr-value,
+.token.inserted,
+.token.regex {
+  color: var(--code-token-string);
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.token.variable,
+.token.parameter {
+  color: var(--code-token-variable);
+}
+
+.token.atrule,
+.token.keyword,
+.token.important {
+  color: var(--code-token-keyword);
+}
+
+.token.function,
+.token.method {
+  color: var(--code-token-function);
+}
+
+.token.important,
+.token.bold {
+  font-weight: 600;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+/* ── Custom scrollbar ──────────────────────────────────────────────────────── */
+
+/* Webkit (Chrome, Edge, Safari) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}

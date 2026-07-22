@@ -1,0 +1,91 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.pr-desc {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.pr-desc__header {
+  padding: 1rem 1.25rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--diff-bg);
+}
+
+.pr-desc__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.45rem;
+  color: var(--file-name-color);
+  line-height: 1.4;
+}
+
+.pr-desc__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--panel-title-color);
+  flex-wrap: wrap;
+}
+
+.pr-desc__author {
+  font-weight: 500;
+}
+
+.pr-desc__sep,
+.pr-desc__arrow {
+  opacity: 0.45;
+}
+
+.pr-desc__branch {
+  font-family: 'Fira Code', Consolas, monospace;
+  font-size: 0.75rem;
+  background: var(--code-bg, rgba(0,0,0,0.06));
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  color: var(--file-name-color);
+}
+
+.pr-desc__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+  color: var(--file-name-color);
+
+  ::ng-deep {
+    p          { margin: 0 0 0.75rem; line-height: 1.65; }
+    h1, h2, h3 { margin: 1.25rem 0 0.5rem; font-weight: 600; line-height: 1.3; }
+    h1         { font-size: 1.1rem; }
+    h2         { font-size: 1rem; }
+    h3         { font-size: 0.9375rem; }
+    code       { font-family: 'Fira Code', Consolas, monospace; font-size: 0.875em;
+                 background: var(--inline-code-bg); padding: 0.15rem 0.35rem; border-radius: 3px; }
+    pre        { background: var(--code-block-bg); padding: 1rem; border-radius: 6px;
+                 overflow-x: auto; margin: 0 0 0.75rem; }
+    pre code   { background: none; padding: 0; color: var(--code-block-text); }
+    ul, ol     { padding-left: 1.5rem; margin: 0 0 0.75rem; }
+    li         { margin-bottom: 0.25rem; line-height: 1.55; }
+    blockquote { margin: 0.75rem 0; padding: 0.5rem 0.875rem; border-left: 3px solid var(--accent);
+                 opacity: 0.8; }
+    a          { color: var(--accent); text-decoration: none; }
+    a:hover    { text-decoration: underline; }
+    hr         { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+    table      { border-collapse: collapse; width: 100%; margin: 0 0 0.75rem; font-size: 0.875rem; }
+    th, td     { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+    th         { background: var(--code-bg, rgba(0,0,0,0.04)); font-weight: 600; }
+  }
+}
+
+.pr-desc__empty {
+  color: var(--panel-title-color);
+  font-size: 0.875rem;
+  font-style: italic;
+}

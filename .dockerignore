@@ -1,0 +1,9 @@
+frontend/
+docs/
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.angular/
+*.user
+.git/

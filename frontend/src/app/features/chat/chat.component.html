@@ -1,0 +1,72 @@
+<div class="chat-container">
+  <div class="messages-area">
+    @if (messages().length === 0) {
+      <div class="empty-state">
+        <p>{{ t().chatEmpty }}</p>
+      </div>
+    }
+
+    @for (msg of messages(); track $index) {
+      <div class="message" [class.message--user]="msg.role === 'user'" [class.message--ai]="msg.role === 'assistant'">
+        <div class="message-bubble">
+          @if (msg.role === 'assistant') {
+            @if (msg.content) {
+              <markdown [data]="msg.content" />
+            } @else {
+              <span class="typing-indicator">
+                <span></span><span></span><span></span>
+              </span>
+            }
+          } @else {
+            <p>{{ msg.content }}</p>
+          }
+        </div>
+      </div>
+    }
+
+    <div #messagesEnd></div>
+  </div>
+
+  <div class="chips-row">
+    @for (chip of suggestions(); track chip) {
+      <button
+        class="chip"
+        type="button"
+        [disabled]="streaming() || loadingSuggestions()"
+        (click)="sendChip(chip)"
+      >{{ chip }}</button>
+    }
+  </div>
+
+  <div class="input-row">
+    <div class="input-wrap">
+      <textarea
+        #messageInput
+        class="message-input"
+        [value]="inputText()"
+        (input)="inputText.set($any($event.target).value)"
+        (keydown)="onEnter($event)"
+        [disabled]="streaming()"
+        [placeholder]="t().chatPlaceholder"
+        [attr.maxlength]="maxMessageLength"
+        rows="2"
+      ></textarea>
+      @if (inputText().length > 0) {
+        <span
+          class="char-counter"
+          [class.char-counter--near-limit]="inputText().length >= maxMessageLength * 0.9"
+        >{{ inputText().length }}/{{ maxMessageLength }}</span>
+      }
+    </div>
+    <button
+      class="send-btn"
+      type="button"
+      [disabled]="sendDisabled()"
+      (click)="send()"
+    >{{ t().send }}</button>
+  </div>
+
+  <div class="disclaimer-footer">
+    {{ t().disclaimer }}
+  </div>
+</div>

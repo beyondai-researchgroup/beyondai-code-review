@@ -1,0 +1,31 @@
+<div class="diff-viewer">
+  <div class="diff-header">
+    <span class="diff-filename" [title]="fileName() ?? ''">{{ fileName() }}</span>
+  </div>
+
+  <div class="diff-body" #diffBody (mouseup)="onSelectionMouseUp()" (scroll)="onDiffScroll()">
+    @if (loading()) {
+      <div class="state-msg">{{ t().loadingDiff }}</div>
+    } @else if (errorMessage()) {
+      <div class="state-msg state-msg--error">{{ errorMessage() }}</div>
+    } @else {
+      @for (line of lines(); track $index) {
+        <div [ngClass]="lineClass(line.type)" [attr.data-index]="$index">
+          <span class="line-number">{{ line.lineNumber }}</span>
+          <span class="line-content">{{ line.content }}</span>
+        </div>
+      }
+    }
+  </div>
+
+  @if (quotePopup()) {
+    <button
+      class="quote-popup"
+      type="button"
+      [style.top.px]="quotePopup()!.top"
+      [style.left.px]="quotePopup()!.left"
+      (mousedown)="$event.preventDefault()"
+      (click)="confirmQuote()"
+    >{{ t().quoteToChat }}</button>
+  }
+</div>
