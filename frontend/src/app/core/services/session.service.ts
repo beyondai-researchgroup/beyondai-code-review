@@ -128,6 +128,17 @@ export class SessionService {
     });
   }
 
+  /**
+   * Switches an Intro-session's mode in place (AI ↔ Report) so the guided tour can show both
+   * live on the same demo PR. The backend rejects this for real AI/Report study sessions.
+   */
+  switchMode(sessionId: string, mode: ReviewMode): Observable<{ mode: ReviewMode }> {
+    return this.http.post<{ mode: ReviewMode }>(
+      `${this.apiUrl}/${sessionId}/mode`,
+      { mode }
+    );
+  }
+
   /** Submits the human reviewer's own decision and comment for the current session. */
   submitDecision(sessionId: string, payload: SubmitDecisionRequest): Observable<ReviewDecision> {
     return this.http.post<ReviewDecision>(

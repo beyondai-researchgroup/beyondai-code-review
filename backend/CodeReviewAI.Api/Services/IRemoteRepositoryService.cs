@@ -35,4 +35,16 @@ public interface IRemoteRepositoryService
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A markdown-formatted string ready to be injected into the AI prompt.</returns>
     Task<string> LoadRepoContextAsync(string token, string owner, string repo, CancellationToken ct);
+
+    /// <summary>
+    /// Loads and extracts text from every file under the repository's <c>Docs/</c> folder,
+    /// for use as background reference material (e.g. a referenced standard/specification)
+    /// that the AI can draw on in chat without the file being shown anywhere in the UI.
+    /// </summary>
+    /// <param name="token">Personal Access Token for this request.</param>
+    /// <param name="owner">Repository owner login.</param>
+    /// <param name="repo">Repository name without the owner prefix.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Extracted text, or <c>null</c> when the folder is absent or empty.</returns>
+    Task<string?> LoadDocsContentAsync(string token, string owner, string repo, CancellationToken ct);
 }

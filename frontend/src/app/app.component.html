@@ -4,9 +4,10 @@
     <div class="header-left">
       <div class="nav-brand">
         <img [src]="logoSrc()" alt="BeyondAI logo" class="nav-logo" aria-hidden="true">
-        <span class="nav-title">BeyondAI</span>
+        <span class="nav-title">BeyondAI Research Group</span>
       </div>
       @if (sessionId()) {
+        <span class="header-divider" aria-hidden="true"></span>
         <span class="pr-title">{{ prTitle() }}</span>
       }
     </div>
@@ -144,7 +145,10 @@
 @if (showFinishModal() && sessionId()) {
   <app-finish-review-modal
     [sessionId]="sessionId()!"
+    [closable]="!isIntroSession()"
     (closed)="onModalClosed()"
     (decisionSubmitted)="onDecisionSubmitted($event)"
   />
 }
+
+<app-tour-overlay />

@@ -24,6 +24,8 @@ import { ReviewDecision, ReviewDecisionType } from '../../core/models/review-dec
 })
 export class FinishReviewModalComponent implements OnInit {
   readonly sessionId = input.required<string>();
+  /** When false, the modal can only leave via a real decision submit — no X button, Escape, or backdrop click. */
+  readonly closable = input<boolean>(true);
 
   readonly closed = output<void>();
   readonly decisionSubmitted = output<ReviewDecision>();
@@ -56,6 +58,7 @@ export class FinishReviewModalComponent implements OnInit {
   }
 
   close(): void {
+    if (!this.closable()) return;
     this.closed.emit();
   }
 

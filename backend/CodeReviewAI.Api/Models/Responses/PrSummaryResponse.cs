@@ -12,7 +12,7 @@ namespace CodeReviewAI.Api.Models.Responses;
 /// <param name="Files">Changed files without patch content.</param>
 /// <param name="TotalAdditions">Sum of line additions across all changed files.</param>
 /// <param name="TotalDeletions">Sum of line deletions across all changed files.</param>
-/// <param name="ShortSummary">AI-generated 2-3 sentence plain-text paraphrase of the description, or <c>null</c> if the PR has no description.</param>
+/// <param name="ShortSummary">2-3 sentence plain-text paraphrase of the description — AI-generated, or a fixed predefined text when <c>Session:UseStaticSummary</c> is on (see <see cref="Services.StaticSummaryContent"/>).</param>
 public record PrSummaryResponse(
     string Title,
     string Author,

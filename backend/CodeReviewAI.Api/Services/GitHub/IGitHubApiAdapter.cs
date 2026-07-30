@@ -41,4 +41,14 @@ internal interface IGitHubApiAdapter
     /// Fetches the repository file tree and content of key configuration/documentation files.
     /// </summary>
     Task<GitHubRepoContextData> GetRepoContextDataAsync(string token, string owner, string repo, CancellationToken ct);
+
+    /// <summary>
+    /// Fetches and extracts text from every file under a repository's <c>Docs/</c> folder
+    /// (on the default branch), for use as background reference material the AI can draw
+    /// on without the file ever being exposed in the PR file list or diff viewer. PDF files
+    /// have their text extracted; other files are read as plain UTF-8 text. Returns
+    /// <c>null</c> when the folder doesn't exist or contains nothing readable — this is a
+    /// best-effort extra, never a hard requirement for the session to load.
+    /// </summary>
+    Task<string?> GetDocsContentAsync(string token, string owner, string repo, CancellationToken ct);
 }

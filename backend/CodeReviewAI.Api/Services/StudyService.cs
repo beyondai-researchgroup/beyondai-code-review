@@ -10,8 +10,11 @@ namespace CodeReviewAI.Api.Services;
 /// </summary>
 internal sealed class StudyService : IStudyService, IAsyncDisposable
 {
+    private static readonly Dictionary<int, string> SessionNamesById = new() { [1] = "Intro", [2] = "AI", [3] = "Report" };
+
     private readonly Lazy<NpgsqlDataSource> _dataSource;
     private readonly HashSet<string> _testParticipantIds;
+    private readonly Dictionary<string, int> _testParticipantFixedSessions;
     private readonly ILogger<StudyService> _logger;
 
     /// <summary>Creates the service; the data source is initialised lazily on first use.</summary>
@@ -30,6 +33,12 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
         _testParticipantIds = new HashSet<string>(
             configuration.GetSection("Study:TestParticipantIds").Get<string[]>() ?? [],
             StringComparer.Ordinal);
+
+        // Optional per-participant pin (id -> SessionId) for test participants that should
+        // always land on a specific session instead of the default Intro — e.g. a participant
+        // dedicated to repeatedly testing just the AI mode, or just the Report mode.
+        _testParticipantFixedSessions = configuration.GetSection("Study:TestParticipantFixedSessions").Get<Dictionary<string, int>>()
+            ?? new Dictionary<string, int>();
     }
 
     /// <inheritdoc />
@@ -45,13 +54,16 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
                 return new StudyLoginState(false, null, null, false);
         }
 
-        // Test participants (Study:TestParticipantIds) always land on the Intro session
-        // regardless of their actual ParticipantSession.IsFinished flags — this lets the
-        // testing phase repeatedly exercise the AI/Report mode choice without the flags
-        // (which NASA-TLX still updates and TlxResult still records normally) ever
-        // advancing them past Intro.
+        // Test participants (Study:TestParticipantIds) always land on the same fixed session —
+        // Intro by default, or whichever session Study:TestParticipantFixedSessions pins them
+        // to — regardless of their actual ParticipantSession.IsFinished flags. NASA-TLX still
+        // updates those flags and still records TlxResult normally; the override only affects
+        // what this login read-back returns, so the pinned session can be replayed indefinitely.
         if (_testParticipantIds.Contains(participantId))
-            return new StudyLoginState(true, 1, "Intro", false);
+        {
+            var sessionId = _testParticipantFixedSessions.GetValueOrDefault(participantId, 1);
+            return new StudyLoginState(true, sessionId, SessionNamesById[sessionId], false);
+        }
 
         await using var nextCmd = new NpgsqlCommand(
             """

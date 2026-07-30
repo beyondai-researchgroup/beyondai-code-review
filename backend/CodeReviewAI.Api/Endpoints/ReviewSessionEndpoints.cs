@@ -32,6 +32,7 @@ internal static class ReviewSessionEndpoints
         group.MapPost("/{sessionId}/chat/stream", ChatStream);
         group.MapPost("/{sessionId}/chat/suggestions", GetChatSuggestions);
         group.MapPost("/{sessionId}/report/generate", GenerateReport);
+        group.MapPost("/{sessionId}/mode", SwitchMode);
         group.MapPost("/{sessionId}/decision", SubmitDecision);
         group.MapDelete("/{sessionId}", DeleteSession);
 
@@ -57,6 +58,7 @@ internal static class ReviewSessionEndpoints
         IRemoteRepositoryService github,
         IContextManagerService contextManager,
         IClaudeService claude,
+        IConfiguration config,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(body.GitHubToken) ||
@@ -77,12 +79,13 @@ internal static class ReviewSessionEndpoints
 
         try
         {
-            var (prContext, shortSummary) = await FetchPrWithSummaryAsync(
-                github, contextManager, claude,
+            var (prContext, shortSummary, docsContent) = await FetchPrWithSummaryAsync(
+                github, contextManager, claude, config,
                 body.GitHubToken, body.Owner, body.Repo, body.PrNumber, body.Lang, ct);
 
             session.PrContext = prContext;
             session.ShortSummary = shortSummary;
+            session.DocsContent = docsContent;
             session.GitHubToken = body.GitHubToken;
             session.Owner = body.Owner;
             session.Repo = body.Repo;
@@ -234,7 +237,7 @@ internal static class ReviewSessionEndpoints
             else
             {
                 // Build messages before mutating history to avoid duplicating the current question.
-                apiMessages = contextManager.BuildMessages(session.PrContext, session.History, body.Message, session.RepoContext, body.Lang);
+                apiMessages = contextManager.BuildMessages(session.PrContext, session.History, body.Message, session.RepoContext, session.DocsContent, body.Lang);
 
                 // Persist the user turn immediately so it survives a mid-stream disconnect.
                 session.History.Add(userMessage);
@@ -452,6 +455,36 @@ internal static class ReviewSessionEndpoints
         }
     }
 
+    // ── POST /api/session/{sessionId}/mode ───────────────────────────────────
+
+    /// <summary>
+    /// Switches a session's review mode in place (AI ↔ Report), reusing the same PR context.
+    /// Restricted to Intro (study session 1) sessions — the self-guided tour uses this to show
+    /// both modes live on one demo PR. Real AI/Report study sessions must keep the mode they
+    /// were assigned, so the comparison between modes stays valid.
+    /// </summary>
+    private static async Task<IResult> SwitchMode(
+        string sessionId,
+        SwitchModeRequest body,
+        ISessionService sessions)
+    {
+        var session = await sessions.GetSessionAsync(sessionId);
+        if (session is null)
+            return Results.NotFound(new { error = "Session not found.", detail = sessionId });
+
+        if (session.StudySessionId != 1)
+            return Results.BadRequest(new { error = "Mode switching is only allowed for Intro sessions." });
+
+        if (!Enum.IsDefined(typeof(ReviewMode), body.Mode))
+            return Results.BadRequest(new { error = "Invalid mode." });
+
+        session.Mode = body.Mode;
+        session.LastActivityAt = DateTime.UtcNow;
+        await sessions.UpdateSessionAsync(session);
+
+        return Results.Ok(new { mode = session.Mode });
+    }
+
     // ── POST /api/session/{sessionId}/decision ───────────────────────────────
 
     /// <summary>
@@ -464,7 +497,8 @@ internal static class ReviewSessionEndpoints
         string sessionId,
         SubmitDecisionRequest body,
         ISessionService sessions,
-        IStudyService study)
+        IStudyService study,
+        IEegControlService eeg)
     {
         var session = await sessions.GetSessionAsync(sessionId);
         if (session is null)
@@ -502,6 +536,8 @@ internal static class ReviewSessionEndpoints
                 CancellationToken.None);
         }
 
+        await eeg.MarkerAsync("DECISION", CancellationToken.None);
+
         return Results.Ok(decision);
     }
 
@@ -522,11 +558,14 @@ internal static class ReviewSessionEndpoints
     /// Loads a PR from GitHub and generates the short AI description summary.
     /// Shared by the classic load-pr endpoint and the study start-review flow.
     /// Summary failures are non-fatal — the summary stays null and the UI shows a fallback.
+    /// Also silently fetches the repo's Docs/ folder (if any) as hidden chat reference
+    /// material — a fetch failure there is likewise non-fatal.
     /// </summary>
-    internal static async Task<(PrContext Pr, string? ShortSummary)> FetchPrWithSummaryAsync(
+    internal static async Task<(PrContext Pr, string? ShortSummary, string? DocsContent)> FetchPrWithSummaryAsync(
         IRemoteRepositoryService github,
         IContextManagerService contextManager,
         IClaudeService claude,
+        IConfiguration config,
         string token,
         string owner,
         string repo,
@@ -536,21 +575,40 @@ internal static class ReviewSessionEndpoints
     {
         var prContext = await github.LoadPrContextAsync(token, owner, repo, prNumber, ct);
 
-        string? shortSummary = null;
-        var summaryMessages = contextManager.BuildShortSummaryMessages(prContext.Description, lang);
-        if (summaryMessages is not null)
+        // Test/demo override — every study participant must see identical wording, so the
+        // fixed text below is used instead of a fresh (non-deterministic) AI paraphrase.
+        // The dynamic AI generation path is left intact; flip Session:UseStaticSummary off
+        // in configuration to restore live summary generation.
+        string? shortSummary;
+        if (config.GetValue<bool>("Session:UseStaticSummary"))
         {
-            try
+            shortSummary = StaticSummaryContent.Get(lang);
+        }
+        else
+        {
+            shortSummary = null;
+            var summaryMessages = contextManager.BuildShortSummaryMessages(prContext.Description, lang);
+            if (summaryMessages is not null)
             {
-                var sb = new StringBuilder();
-                await foreach (var chunk in claude.StreamResponseAsync(summaryMessages, ct, ClaudeService.GetSystemPrompt(lang)))
-                    sb.Append(chunk);
-                shortSummary = sb.ToString().Trim();
+                try
+                {
+                    var sb = new StringBuilder();
+                    await foreach (var chunk in claude.StreamResponseAsync(summaryMessages, ct, ClaudeService.GetSystemPrompt(lang)))
+                        sb.Append(chunk);
+                    shortSummary = sb.ToString().Trim();
+                }
+                catch { /* non-fatal */ }
             }
-            catch { /* non-fatal */ }
         }
 
-        return (prContext, shortSummary);
+        string? docsContent = null;
+        try
+        {
+            docsContent = await github.LoadDocsContentAsync(token, owner, repo, ct);
+        }
+        catch { /* non-fatal — hidden reference material, never required for the session */ }
+
+        return (prContext, shortSummary, docsContent);
     }
 
     internal static PrSummaryResponse ToPrSummary(PrContext pr, string? shortSummary) =>

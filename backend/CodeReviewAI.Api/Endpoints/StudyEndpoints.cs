@@ -43,6 +43,7 @@ internal static class StudyEndpoints
     private static async Task<IResult> Login(
         StudyLoginRequest body,
         IStudyService study,
+        IEegControlService eeg,
         CancellationToken ct)
     {
         var participantId = body.ParticipantId?.Trim() ?? string.Empty;
@@ -56,6 +57,13 @@ internal static class StudyEndpoints
 
         if (state.AllFinished)
             return Results.Ok(new { allFinished = true });
+
+        // Intro (session 1) is the first login of the study — (re)start EEG recording.
+        // Any later login (returning for session 2/3) just resumes after the between-session pause.
+        if (state.SessionId == 1)
+            await eeg.StartAsync(participantId, ct);
+        else
+            await eeg.ResumeAsync(ct);
 
         return Results.Ok(new
         {
@@ -80,6 +88,7 @@ internal static class StudyEndpoints
         IContextManagerService contextManager,
         IClaudeService claude,
         IConfiguration config,
+        IEegControlService eeg,
         CancellationToken ct)
     {
         var participantId = body.ParticipantId?.Trim() ?? string.Empty;
@@ -107,12 +116,13 @@ internal static class StudyEndpoints
 
         try
         {
-            var (prContext, shortSummary) = await ReviewSessionEndpoints.FetchPrWithSummaryAsync(
-                github, contextManager, claude, token, owner, repo, prNumber, body.Lang, ct);
+            var (prContext, shortSummary, docsContent) = await ReviewSessionEndpoints.FetchPrWithSummaryAsync(
+                github, contextManager, claude, config, token, owner, repo, prNumber, body.Lang, ct);
 
             var session = await sessions.CreateSessionAsync();
             session.PrContext = prContext;
             session.ShortSummary = shortSummary;
+            session.DocsContent = docsContent;
             session.GitHubToken = token;
             session.Owner = owner;
             session.Repo = repo;
@@ -121,6 +131,8 @@ internal static class StudyEndpoints
             session.StudySessionId = state.SessionId!.Value;
             session.LastActivityAt = DateTime.UtcNow;
             await sessions.UpdateSessionAsync(session);
+
+            await eeg.MarkerAsync(body.ReviewMode == ReviewMode.Ai ? "AI_START" : "REPORT_START", ct);
 
             return Results.Ok(new
             {

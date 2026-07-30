@@ -55,6 +55,10 @@ internal sealed class GitHubService : IRemoteRepositoryService
         return BuildRepoContextString(data);
     }
 
+    /// <inheritdoc />
+    public Task<string?> LoadDocsContentAsync(string token, string owner, string repo, CancellationToken ct) =>
+        _adapter.GetDocsContentAsync(token, owner, repo, ct);
+
     private static string BuildRepoContextString(GitHubRepoContextData data)
     {
         var sb = new StringBuilder();

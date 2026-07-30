@@ -13,8 +13,19 @@ internal sealed class ContextManagerService : IContextManagerService
     private const int MaxHistoryMessages = 10;
     private const int MaxGeneralPatchFiles = 3;
 
+    /// <summary>
+    /// Words that, when present in the user's question, indicate they're asking about a
+    /// referenced standard/specification — gates whether <see cref="BuildDocsBlock"/> pulls
+    /// the (otherwise invisible) Docs-folder content into the prompt. Deliberately narrow: the
+    /// PR's own subject matter (e.g. hashing) would match far too often on broader terms.
+    /// </summary>
+    private static readonly string[] DocsTriggerWords =
+    [
+        "standard", "specifikacij", "specification", "spec", "propis", "fips", "nist"
+    ];
+
     /// <inheritdoc />
-    public List<ApiMessage> BuildMessages(PrContext pr, List<ChatMessage> history, string userQuestion, string? repoContext = null, string lang = "sr")
+    public List<ApiMessage> BuildMessages(PrContext pr, List<ChatMessage> history, string userQuestion, string? repoContext = null, string? docsContent = null, string lang = "sr")
     {
         var messages = new List<ApiMessage>();
 
@@ -37,6 +48,15 @@ internal sealed class ContextManagerService : IContextManagerService
         {
             messages.Add(new ApiMessage("user", patches));
             messages.Add(new ApiMessage("assistant", L.PatchAck(lang)));
+        }
+
+        // 4b. Reference standard/specification — conditional, only when the question itself
+        // seems to be asking about one. This content is never shown anywhere in the UI.
+        var docsBlock = BuildDocsBlock(docsContent, userQuestion, lang);
+        if (docsBlock is not null)
+        {
+            messages.Add(new ApiMessage("user", docsBlock));
+            messages.Add(new ApiMessage("assistant", L.DocsAck(lang)));
         }
 
         // 5. Conversation history — last N messages only.
@@ -227,9 +247,34 @@ internal sealed class ContextManagerService : IContextManagerService
         return sb.ToString().TrimEnd();
     }
 
+    /// <summary>
+    /// Surfaces the (otherwise hidden) Docs-folder reference material only when the current
+    /// question looks like it's asking about a standard/specification — keeps it out of every
+    /// other turn's token budget, matching how <see cref="BuildPatchBlock"/> gates patches.
+    /// </summary>
+    private static string? BuildDocsBlock(string? docsContent, string userQuestion, string lang)
+    {
+        if (string.IsNullOrWhiteSpace(docsContent))
+            return null;
+
+        var lowerQuestion = userQuestion.ToLowerInvariant();
+        if (!DocsTriggerWords.Any(w => lowerQuestion.Contains(w)))
+            return null;
+
+        var sb = new StringBuilder();
+        sb.AppendLine(lang == "en" ? "## Referenced standard/specification" : "## Referentni standard/specifikacija");
+        sb.AppendLine();
+        sb.AppendLine(docsContent);
+        return sb.ToString().TrimEnd();
+    }
+
     /// <summary>Language-specific string helpers.</summary>
     private static class L
     {
+        public static string DocsAck(string lang) => lang == "en"
+            ? "Understood. I have reviewed the referenced standard/specification."
+            : "Razumem. Pregledao sam referentni standard/specifikaciju.";
+
         public static string RepoContextAck(string lang) => lang == "en"
             ? "Understood. I have studied the repository structure and key files and am ready to answer questions about the project."
             : "Razumem. Proučio sam strukturu i ključne fajlove repozitorijuma i spreman sam da odgovaram na pitanja o projektu.";

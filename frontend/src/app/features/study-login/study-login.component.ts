@@ -9,8 +9,6 @@ import { Lang } from '../../core/i18n/translations';
 import { ReviewMode } from '../../core/models/review-mode.model';
 import { PrLoadedEvent } from '../pr-loader/pr-loader.component';
 
-type Step = 'login' | 'chooseMode';
-
 /**
  * Study-flow login page: the participant enters only their Participant ID and
  * picks a language (locked afterwards). The next unfinished session (Intro →
@@ -37,12 +35,17 @@ export class StudyLoginComponent {
   readonly ReviewMode = ReviewMode;
 
   readonly participantId = signal('');
-  readonly step = signal<Step>('login');
   readonly loading = signal(false);
   readonly errorMessage = signal<string | null>(null);
   readonly allDone = signal(false);
   readonly sessionName = signal<string | null>(null);
-  readonly selectedMode = signal<ReviewMode>(ReviewMode.Ai);
+
+  /**
+   * Intro sessions no longer let the participant pick a mode — the guided tour now shows both
+   * modes live regardless, so there's nothing left for them to choose. Every Intro run starts
+   * in this fixed mode, always in the same order, for consistency across participants.
+   */
+  private static readonly INTRO_START_MODE = ReviewMode.Ai;
 
   private dbSessionId: number | null = null;
 
@@ -90,9 +93,9 @@ export class StudyLoginComponent {
         } else if (res.sessionName === 'Report') {
           this.startReview(ReviewMode.Report);
         } else {
-          // Intro session: the participant picks the mode themselves.
-          this.loading.set(false);
-          this.step.set('chooseMode');
+          // Intro session: always starts the same way, no mode choice — the guided tour
+          // shows both modes live regardless of which one the session starts in.
+          this.startReview(StudyLoginComponent.INTRO_START_MODE);
         }
       },
       error: err => {
@@ -100,11 +103,6 @@ export class StudyLoginComponent {
         this.errorMessage.set(this.extractError(err));
       }
     });
-  }
-
-  start(): void {
-    if (this.loading()) return;
-    this.startReview(this.selectedMode());
   }
 
   private startReview(mode: ReviewMode): void {

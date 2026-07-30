@@ -82,8 +82,38 @@ export interface Translations {
   studyLangLabel: string;
   studyLogin: string;
   studySessionLabel: string;
-  studyChooseMode: string;
-  studyStart: string;
+  tour: {
+    next: string;
+    back: string;
+    skip: string;
+    done: string;
+    welcomeTitle: string;
+    welcomeBody: string;
+    fileListTitle: string;
+    fileListBody: string;
+    summaryTitle: string;
+    summaryBody: string;
+    diffTitle: string;
+    diffBody: string;
+    quoteTitle: string;
+    quoteBody: string;
+    chatTitle: string;
+    chatBody: string;
+    reportTitle: string;
+    reportBody: string;
+    searchTitle: string;
+    searchBody: string;
+    askQuestionTitle: string;
+    askQuestionBody: string;
+    switchToReportTitle: string;
+    switchToReportBody: string;
+    switchToAiTitle: string;
+    switchToAiBody: string;
+    decisionBtnTitle: string;
+    decisionBtnBody: string;
+    finishModalTitle: string;
+    finishModalBody: string;
+  };
 }
 
 export const translations: Record<Lang, Translations> = {
@@ -144,7 +174,7 @@ export const translations: Record<Lang, Translations> = {
     modeLabel: 'Način pregleda',
     modeAiTitle: 'AI Mode',
     modeAiDesc: 'Postavljajte pitanja AI asistentu o PR-u u realnom vremenu',
-    modeReportTitle: 'Report Mode',
+    modeReportTitle: 'Wiki Mode',
     modeReportDesc: 'Dobijte detaljan pisani izveštaj o PR-u, bez chata',
 
     reportLoading: 'Generišem detaljan izveštaj o PR-u…',
@@ -174,8 +204,38 @@ export const translations: Record<Lang, Translations> = {
     studyLangLabel: 'Jezik / Language',
     studyLogin: 'Prijavi se',
     studySessionLabel: 'Sesija',
-    studyChooseMode: 'Izaberite način pregleda za uvodnu sesiju',
-    studyStart: 'Započni sesiju',
+    tour: {
+      next: 'Dalje →',
+      back: '← Nazad',
+      skip: 'Preskoči tur',
+      done: 'Razumem, hoću sam da probam',
+      welcomeTitle: 'Dobrodošli u BeyondAI',
+      welcomeBody: 'Ovaj kratak vodič će vas provesti kroz sve delove aplikacije koje ćete koristiti tokom pregleda Pull Requesta. Kliknite „Dalje" da nastavite, ili „Preskoči tur" ako želite odmah sami da istražujete.',
+      fileListTitle: 'Lista izmenjenih fajlova',
+      fileListBody: 'Ovde vidite sve fajlove koje ovaj Pull Request menja. Kliknite na fajl da otvorite njegove izmene (diff) u srednjem panelu.',
+      summaryTitle: 'Sažetak PR-a',
+      summaryBody: 'Kratak automatski sažetak Pull Requesta. Klikom na „Prikaži ceo opis" otvara se pun opis koji je autor PR-a napisao.',
+      diffTitle: 'Pregled izmena (diff)',
+      diffBody: 'Zeleno su dodate linije koda, crveno obrisane. Ovde čitate šta je tačno promenjeno u fajlu koji ste izabrali.',
+      quoteTitle: 'Citiranje koda u chat',
+      quoteBody: 'Ako selektujete deo koda mišem, pojaviće se dugme „Citiraj u chat" — tako možete pitati AI asistenta konkretno o toj liniji ili bloku koda.',
+      chatTitle: 'Chat sa AI asistentom',
+      chatBody: 'Ovde postavljate pitanja AI asistentu o Pull Requestu — slobodnim tekstom ili klikom na ponuđena brza pitanja. Asistent odgovara na osnovu koda i opisa PR-a, ali nikad ne kaže da li treba odobriti ili odbaciti PR — tu odluku uvek donosite vi.',
+      reportTitle: 'Tehnički izveštaj',
+      reportBody: 'Umesto chata, ovde dobijate detaljan pisani tehnički izveštaj o projektu i PR-u. Možete pretraživati dokument pomoću polja za pretragu na vrhu.',
+      searchTitle: 'Pretraga dokumentacije',
+      searchBody: 'Ukucajte pojam ovde da pronađete sva mesta gde se pominje u izveštaju — strelice vas vode kroz rezultate, a „✕" briše pretragu.',
+      askQuestionTitle: 'Vaš red — postavite pitanje',
+      askQuestionBody: 'Sada probajte sami: ukucajte bilo koje pitanje o ovom PR-u u polje ispod i pošaljite ga. Sačekajte pravi odgovor od AI asistenta, pa kliknite „Dalje" da nastavite.',
+      switchToReportTitle: 'Prelazimo na Wiki Mode',
+      switchToReportBody: 'Ova sesija je u AI Mode-u, ali u drugim sesijama možete dobiti Wiki Mode. Da biste ga videli uživo, sada ćemo privremeno prebaciti ovaj panel — umesto chata, dobijate gotov tehnički izveštaj koji možete pretraživati.',
+      switchToAiTitle: 'Prelazimo na AI Mode',
+      switchToAiBody: 'Ova sesija je u Wiki Mode-u, ali u drugim sesijama možete dobiti AI Mode. Da biste ga videli uživo, sada ćemo privremeno prebaciti ovaj panel — umesto izveštaja, postavljate pitanja asistentu u realnom vremenu.',
+      decisionBtnTitle: 'Donošenje odluke',
+      decisionBtnBody: 'Kada ste spremni, ovim dugmetom otvarate formu za finalnu odluku o Pull Requestu.',
+      finishModalTitle: 'Forma za odluku — vaš red',
+      finishModalBody: 'Ovo je poslednji korak. Za ovu vežbu upišite kratak komentar (npr. „Intro") i kliknite „Prihvati" ili „Odbaci" — nije bitno koje, ovo je samo vežba. To će vas automatski prebaciti na NASA-TLX upitnik, gde vas čeka sličan kratak vodič.',
+    },
   },
   en: {
     finish: 'Make a decision',
@@ -234,7 +294,7 @@ export const translations: Record<Lang, Translations> = {
     modeLabel: 'Review mode',
     modeAiTitle: 'AI Mode',
     modeAiDesc: 'Ask the AI assistant questions about the PR in real time',
-    modeReportTitle: 'Report Mode',
+    modeReportTitle: 'Wiki Mode',
     modeReportDesc: 'Get a detailed written report about the PR, without chat',
 
     reportLoading: 'Generating detailed report for this PR…',
@@ -264,7 +324,37 @@ export const translations: Record<Lang, Translations> = {
     studyLangLabel: 'Jezik / Language',
     studyLogin: 'Log in',
     studySessionLabel: 'Session',
-    studyChooseMode: 'Choose the review mode for the intro session',
-    studyStart: 'Start session',
+    tour: {
+      next: 'Next →',
+      back: '← Back',
+      skip: 'Skip tour',
+      done: 'Got it, let me try it myself',
+      welcomeTitle: 'Welcome to BeyondAI',
+      welcomeBody: 'This short guide will walk you through every part of the app you\'ll use while reviewing a Pull Request. Click "Next" to continue, or "Skip tour" to explore on your own right away.',
+      fileListTitle: 'Changed files list',
+      fileListBody: 'Here you see every file this Pull Request changes. Click a file to open its changes (diff) in the middle panel.',
+      summaryTitle: 'PR summary',
+      summaryBody: 'A short automatic summary of the Pull Request. Clicking "Show full description" opens the full description the PR author wrote.',
+      diffTitle: 'Viewing changes (diff)',
+      diffBody: 'Green lines were added, red lines were removed. This is where you read exactly what changed in the file you selected.',
+      quoteTitle: 'Quoting code into the chat',
+      quoteBody: 'If you select part of the code with your mouse, a "Quote to chat" button appears — letting you ask the AI assistant specifically about that line or block of code.',
+      chatTitle: 'Chat with the AI assistant',
+      chatBody: 'Here you ask the AI assistant questions about the Pull Request — in free text, or by clicking one of the suggested quick questions. The assistant answers based on the code and PR description, but never says whether the PR should be approved or rejected — that decision is always yours.',
+      reportTitle: 'Technical report',
+      reportBody: 'Instead of a chat, here you get a detailed written technical report about the project and the PR. You can search the document using the search field at the top.',
+      searchTitle: 'Searching the documentation',
+      searchBody: 'Type a term here to find every place it\'s mentioned in the report — the arrows step through the results, and "✕" clears the search.',
+      askQuestionTitle: 'Your turn — ask a question',
+      askQuestionBody: 'Now try it yourself: type any question about this PR into the field below and send it. Wait for a real answer from the AI assistant, then click "Next" to continue.',
+      switchToReportTitle: 'Switching to Wiki Mode',
+      switchToReportBody: 'This session is in AI Mode, but in other sessions you may get Wiki Mode. To show it to you live, we\'ll now temporarily switch this panel — instead of a chat, you get a ready-made technical report you can search.',
+      switchToAiTitle: 'Switching to AI Mode',
+      switchToAiBody: 'This session is in Wiki Mode, but in other sessions you may get AI Mode. To show it to you live, we\'ll now temporarily switch this panel — instead of a report, you ask the assistant questions in real time.',
+      decisionBtnTitle: 'Making a decision',
+      decisionBtnBody: 'When you\'re ready, this button opens the form for your final decision on the Pull Request.',
+      finishModalTitle: 'Decision form — your turn',
+      finishModalBody: 'This is the last step. For this exercise, write a short comment (e.g. "Intro") and click "Accept" or "Reject" — either is fine, this is just practice. That will automatically take you to the NASA-TLX questionnaire, where a similar short guide is waiting for you.',
+    },
   }
 };

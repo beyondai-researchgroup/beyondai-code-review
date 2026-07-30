@@ -1,6 +1,7 @@
 using System.Text;
 using CodeReviewAI.Api.Exceptions;
 using Octokit;
+using UglyToad.PdfPig;
 
 namespace CodeReviewAI.Api.Services.GitHub;
 
@@ -35,6 +36,10 @@ internal sealed class OctokitApiAdapter : IGitHubApiAdapter
     private const int MaxDocFiles = 5;
     private const int MaxFileChars = 4_000;
     private const int MaxTreePaths = 300;
+
+    private const string DocsRootFolder = "Docs";
+    private const int MaxDocsRootFiles = 5;
+    private const int MaxDocsContentChars = 40_000;
 
     /// <inheritdoc />
     public async Task<GitHubPrData> GetPrDataAsync(
@@ -190,6 +195,73 @@ internal sealed class OctokitApiAdapter : IGitHubApiAdapter
             throw new GitHubIntegrationException(
                 $"Unexpected error while fetching repository context for {owner}/{repo}: {ex.Message}", ex);
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> GetDocsContentAsync(string token, string owner, string repo, CancellationToken ct)
+    {
+        var client = new GitHubClient(ProductHeader) { Credentials = new Credentials(token) };
+
+        IReadOnlyList<RepositoryContent> entries;
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            entries = await client.Repository.Content.GetAllContents(owner, repo, DocsRootFolder);
+        }
+        catch (NotFoundException)
+        {
+            // No Docs/ folder in this repo — not an error, just nothing extra to attach.
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Best-effort extra context — any other API hiccup just means it's skipped.
+            return null;
+        }
+
+        var sb = new StringBuilder();
+        foreach (var entry in entries.Where(e => e.Type == ContentType.File).Take(MaxDocsRootFiles))
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var bytes = await client.Repository.Content.GetRawContent(owner, repo, entry.Path);
+                var text = ExtractText(entry.Path, bytes);
+                if (string.IsNullOrWhiteSpace(text))
+                    continue;
+
+                sb.AppendLine($"### {entry.Path}");
+                sb.AppendLine(text.Trim());
+                sb.AppendLine();
+            }
+            catch
+            {
+                // Skip files that can't be read or whose format can't be extracted.
+            }
+        }
+
+        var result = sb.ToString().TrimEnd();
+        if (result.Length == 0)
+            return null;
+        if (result.Length > MaxDocsContentChars)
+            result = result[..MaxDocsContentChars] + "\n... [sadržaj skraćen]";
+
+        return result;
+    }
+
+    /// <summary>Extracts plain text from a file's raw bytes based on its extension.</summary>
+    private static string ExtractText(string path, byte[] bytes)
+    {
+        if (path.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            var sb = new StringBuilder();
+            using var pdf = PdfDocument.Open(bytes);
+            foreach (var page in pdf.GetPages())
+                sb.AppendLine(page.Text);
+            return sb.ToString();
+        }
+
+        return Encoding.UTF8.GetString(bytes);
     }
 
     private static IEnumerable<string> SelectKeyFiles(IReadOnlyList<string> paths)

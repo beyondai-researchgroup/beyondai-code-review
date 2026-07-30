@@ -28,6 +28,15 @@ public class ReviewSession
     /// </summary>
     public string? RepoContext { get; set; }
 
+    /// <summary>
+    /// Extracted text from the repository's <c>Docs/</c> folder (e.g. a referenced
+    /// standard/specification), fetched silently alongside the PR itself. Never surfaced
+    /// through <c>PrSummaryResponse</c>, the file list, or the diff viewer — the participant
+    /// has no way to know it exists. Only pulled into the chat prompt when the question
+    /// itself seems to be asking about a standard (see <c>ContextManagerService</c>).
+    /// </summary>
+    public string? DocsContent { get; set; }
+
     /// <summary>GitHub PAT stored in-memory for the lifetime of the session (never persisted).</summary>
     public string? GitHubToken { get; set; }
 
@@ -60,8 +69,10 @@ public class ReviewSession
     public string? GeneratedReport { get; set; }
 
     /// <summary>
-    /// AI-generated 2-3 sentence plain-text paraphrase of the PR description.
-    /// Null when the PR has no description. Generated once during load-pr and cached here.
+    /// 2-3 sentence plain-text paraphrase of the PR description — AI-generated, or a fixed
+    /// predefined text when <c>Session:UseStaticSummary</c> is on (see
+    /// <see cref="Services.StaticSummaryContent"/>). Null when the PR has no description and
+    /// the static override is off. Set once during load-pr and cached here.
     /// </summary>
     public string? ShortSummary { get; set; }
 

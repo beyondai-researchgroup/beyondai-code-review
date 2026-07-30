@@ -55,13 +55,20 @@
   white-space: nowrap;
 }
 
+.header-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
 .pr-title {
   font-size: 0.9375rem;
-  font-weight: 600;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--header-text);
+  color: var(--text-muted);
   min-width: 0;
 }
 

@@ -22,11 +22,16 @@ public interface IContextManagerService
     /// <param name="history">Prior conversation turns for this session.</param>
     /// <param name="userQuestion">The current question from the user.</param>
     /// <param name="repoContext">Optional pre-fetched repository file-tree context.</param>
+    /// <param name="docsContent">
+    /// Optional pre-fetched reference material (e.g. a standard/specification) from the
+    /// repository's Docs folder. Only included when <paramref name="userQuestion"/> appears
+    /// to be asking about a standard — see the implementation's trigger-word check.
+    /// </param>
     /// <returns>
     /// An ordered list of <see cref="ApiMessage"/> objects ready to be serialised
     /// and sent to the Anthropic Messages API.
     /// </returns>
-    List<ApiMessage> BuildMessages(PrContext pr, List<ChatMessage> history, string userQuestion, string? repoContext = null, string lang = "sr");
+    List<ApiMessage> BuildMessages(PrContext pr, List<ChatMessage> history, string userQuestion, string? repoContext = null, string? docsContent = null, string lang = "sr");
 
     /// <summary>
     /// Constructs the message list for a single-shot PR report.

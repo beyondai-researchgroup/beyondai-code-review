@@ -6,7 +6,7 @@
       <button
         class="modal-close"
         type="button"
-        [disabled]="submitting()"
+        [disabled]="submitting() || !closable()"
         (click)="close()"
         aria-label="Zatvori"
       >✕</button>

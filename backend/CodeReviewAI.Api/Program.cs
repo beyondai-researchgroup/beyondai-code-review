@@ -59,6 +59,13 @@ builder.Services.AddHostedService<SessionCleanupService>();
 
 builder.Services.AddSingleton<IStudyService, StudyService>();
 
+builder.Services.AddHttpClient<IEegControlService, EegControlService>(client =>
+{
+    var eegUrl = builder.Configuration["Eeg:ControlUrl"] ?? "http://localhost:5900";
+    client.BaseAddress = new Uri(eegUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(2);
+});
+
 var app = builder.Build();
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
