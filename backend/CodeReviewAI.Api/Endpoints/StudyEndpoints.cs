@@ -55,6 +55,12 @@ internal static class StudyEndpoints
         if (!state.ParticipantExists)
             return Results.NotFound(new { error = "Participant not found.", detail = participantId });
 
+        // Informed consent (given via the separate Consent app) is a hard prerequisite for the
+        // whole study flow, same as AllFinished blocks it at the other end — the frontend shows
+        // a message + link to the Consent app instead of the mode-choice screen.
+        if (state.ConsentRequired)
+            return Results.Ok(new { allFinished = false, consentRequired = true });
+
         if (state.AllFinished)
             return Results.Ok(new { allFinished = true });
 
@@ -69,7 +75,10 @@ internal static class StudyEndpoints
         {
             allFinished = false,
             sessionId = state.SessionId,
-            sessionName = state.SessionName
+            sessionName = state.SessionName,
+            // Locked once at the Consent app and propagated here — the frontend applies this
+            // instead of letting the participant pick a language on this screen.
+            language = state.Language
         });
     }
 
@@ -98,19 +107,40 @@ internal static class StudyEndpoints
         var state = await study.GetLoginStateAsync(participantId, ct);
         if (!state.ParticipantExists)
             return Results.NotFound(new { error = "Participant not found.", detail = participantId });
+        if (state.ConsentRequired)
+            return Results.BadRequest(new { error = "Consent required.", detail = "This participant hasn't completed the informed-consent step yet." });
         if (state.AllFinished)
             return Results.BadRequest(new { error = "All sessions finished.", detail = "This participant has no remaining sessions." });
 
-        var owner = config["Study:Pr:Owner"];
-        var repo = config["Study:Pr:Repo"];
-        var prNumber = config.GetValue<int>("Study:Pr:Number");
-        var token = config["GitHub:PersonalAccessToken"];
+        // Prefer this session's explicit PR override, then the research's active config, then
+        // fall back to the legacy global Study:Pr:*/GitHub:PersonalAccessToken config when the
+        // research has none configured (e.g. pre-existing test participants backfilled to the
+        // seeded Test Research). state.SessionId is non-null here — AllFinished was already
+        // checked above.
+        var prConfig = await study.GetPrConfigForParticipantAsync(participantId, state.SessionId!.Value, ct);
+
+        string? owner, repo, token;
+        int prNumber;
+        if (prConfig is not null)
+        {
+            owner = prConfig.Owner;
+            repo = prConfig.Repo;
+            prNumber = prConfig.PrNumber;
+            token = prConfig.Token;
+        }
+        else
+        {
+            owner = config["Study:Pr:Owner"];
+            repo = config["Study:Pr:Repo"];
+            prNumber = config.GetValue<int>("Study:Pr:Number");
+            token = config["GitHub:PersonalAccessToken"];
+        }
 
         if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo) ||
             prNumber <= 0 || string.IsNullOrWhiteSpace(token))
         {
             return Results.Json(
-                new { error = "Demo PR not configured.", detail = "Study:Pr:Owner/Repo/Number and GitHub:PersonalAccessToken must be set." },
+                new { error = "Demo PR not configured.", detail = "The participant's Research has no PR config, and the fallback Study:Pr:Owner/Repo/Number + GitHub:PersonalAccessToken is not set either." },
                 statusCode: StatusCodes.Status503ServiceUnavailable);
         }
 

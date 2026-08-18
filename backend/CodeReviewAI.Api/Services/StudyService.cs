@@ -46,24 +46,35 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
     {
         await using var conn = await _dataSource.Value.OpenConnectionAsync(ct);
 
-        await using (var existsCmd = new NpgsqlCommand(
-            """SELECT 1 FROM "Participant" WHERE "ParticipantId" = @pid LIMIT 1""", conn))
+        string? language;
+        bool consentGiven;
+        await using (var infoCmd = new NpgsqlCommand(
+            """SELECT "Language", "ConsentGivenAt" FROM "Participant" WHERE "ParticipantId" = @pid LIMIT 1""", conn))
         {
-            existsCmd.Parameters.AddWithValue("pid", participantId);
-            if (await existsCmd.ExecuteScalarAsync(ct) is null)
-                return new StudyLoginState(false, null, null, false);
+            infoCmd.Parameters.AddWithValue("pid", participantId);
+            await using var infoReader = await infoCmd.ExecuteReaderAsync(ct);
+            if (!await infoReader.ReadAsync(ct))
+                return new StudyLoginState(false, null, null, false, false, null);
+
+            language = await infoReader.IsDBNullAsync(0, ct) ? null : infoReader.GetString(0);
+            consentGiven = !await infoReader.IsDBNullAsync(1, ct);
         }
 
         // Test participants (Study:TestParticipantIds) always land on the same fixed session —
         // Intro by default, or whichever session Study:TestParticipantFixedSessions pins them
-        // to — regardless of their actual ParticipantSession.IsFinished flags. NASA-TLX still
-        // updates those flags and still records TlxResult normally; the override only affects
-        // what this login read-back returns, so the pinned session can be replayed indefinitely.
+        // to — regardless of their actual ParticipantSession.IsFinished flags, and regardless of
+        // consent status: pre-existing test rows predate the Language/ConsentGivenAt columns
+        // entirely, and the whole point of this override is letting them repeatedly exercise the
+        // flow without the normal gating rules. NASA-TLX still updates IsFinished/TlxResult
+        // normally; the override only affects what this login read-back returns.
         if (_testParticipantIds.Contains(participantId))
         {
             var sessionId = _testParticipantFixedSessions.GetValueOrDefault(participantId, 1);
-            return new StudyLoginState(true, sessionId, SessionNamesById[sessionId], false);
+            return new StudyLoginState(true, sessionId, SessionNamesById[sessionId], false, false, language);
         }
+
+        if (!consentGiven)
+            return new StudyLoginState(true, null, null, false, true, language);
 
         await using var nextCmd = new NpgsqlCommand(
             """
@@ -71,16 +82,46 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
             FROM "ParticipantSession" ps
             JOIN "Sessions" s ON s."Id" = ps."SessionId"
             WHERE ps."ParticipantId" = @pid AND ps."IsFinished" = FALSE
-            ORDER BY ps."SessionId"
+            ORDER BY COALESCE(ps."SequenceOrder", ps."SessionId")
             LIMIT 1
             """, conn);
         nextCmd.Parameters.AddWithValue("pid", participantId);
 
         await using var reader = await nextCmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
-            return new StudyLoginState(true, null, null, true);
+            return new StudyLoginState(true, null, null, true, false, language);
 
-        return new StudyLoginState(true, reader.GetInt32(0), reader.GetString(1), false);
+        return new StudyLoginState(true, reader.GetInt32(0), reader.GetString(1), false, false, language);
+    }
+
+    /// <inheritdoc />
+    public async Task<PrConfig?> GetPrConfigForParticipantAsync(string participantId, int sessionId, CancellationToken ct)
+    {
+        await using var conn = await _dataSource.Value.OpenConnectionAsync(ct);
+        // "explicit" = this participant+session's own PrConfigId override, if any (set via the
+        // Admin Dashboard's Excel PR-assignment sheet). "active" = the research's single
+        // IsActive config, today's default behavior. COALESCE per column so an explicit override
+        // always wins when present, without needing two separate queries/round-trips.
+        await using var cmd = new NpgsqlCommand(
+            """
+            SELECT COALESCE(explicitCfg."GitHubOwner", active."GitHubOwner"),
+                   COALESCE(explicitCfg."GitHubRepo", active."GitHubRepo"),
+                   COALESCE(explicitCfg."GitHubPrNumber", active."GitHubPrNumber"),
+                   COALESCE(explicitCfg."GitHubToken", active."GitHubToken")
+            FROM "Participant" p
+            JOIN "ParticipantSession" ps ON ps."ParticipantId" = p."ParticipantId" AND ps."SessionId" = @sid
+            LEFT JOIN "ResearchPrConfig" explicitCfg ON explicitCfg."Id" = ps."PrConfigId"
+            LEFT JOIN "ResearchPrConfig" active ON active."ResearchId" = p."ResearchId" AND active."IsActive" = TRUE
+            WHERE p."ParticipantId" = @pid
+            """, conn);
+        cmd.Parameters.AddWithValue("pid", participantId);
+        cmd.Parameters.AddWithValue("sid", sessionId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct) || await reader.IsDBNullAsync(0, ct))
+            return null;
+
+        return new PrConfig(reader.GetString(0), reader.GetString(1), reader.GetInt32(2), reader.GetString(3));
     }
 
     /// <inheritdoc />
