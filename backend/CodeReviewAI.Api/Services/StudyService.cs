@@ -91,17 +91,43 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
         if (!string.Equals(taskType, "PR_REVIEW", StringComparison.OrdinalIgnoreCase))
             return new StudyLoginState(true, null, null, false, false, language, NotApplicable: true);
 
-        // Test participants (Participant.IsTestParticipant, set by the Admin Dashboard) always
-        // land on the same fixed session — Intro by default, or whichever session
-        // TestFixedSessionId pins them to — regardless of their actual
+        // Fixed test participants (Participant.IsTestParticipant + TestFixedSessionId) always
+        // land on the one session TestFixedSessionId pins them to — regardless of their actual
         // ParticipantSession.IsFinished flags, and regardless of consent status. NASA-TLX still
         // updates IsFinished/TlxResult normally for a REAL participant; for a test participant it
         // deliberately does not (see the NASA-TLX side of this change) — the whole point of this
         // override is letting them repeatedly exercise the same flow without ever "using it up".
+        if (isTestParticipant && testFixedSessionId is not null)
+        {
+            var sessionId = testFixedSessionId.Value;
+            return new StudyLoginState(true, sessionId, SessionNamesById[sessionId], false, false, language, IsTestParticipant: true, TimerMinutes: timerMinutes);
+        }
+
+        // A test participant WITHOUT a fixed session is a "cycling" one (e.g. 005): they walk their
+        // own ParticipantSession rows in order (Intro → AI → Report, with whatever PR each row
+        // assigns), and once every row is finished, all rows are reset so the next login starts
+        // over at the first one. Consent and baseline are still skipped, like every test participant.
+        // NASA-TLX flips IsFinished for this kind of test participant (unlike fixed ones).
         if (isTestParticipant)
         {
-            var sessionId = testFixedSessionId ?? 1;
-            return new StudyLoginState(true, sessionId, SessionNamesById[sessionId], false, false, language, IsTestParticipant: true, TimerMinutes: timerMinutes);
+            var next = await GetNextUnfinishedSessionAsync(conn, participantId, ct);
+            if (next is null)
+            {
+                await using var resetCmd = new NpgsqlCommand(
+                    """
+                    UPDATE "ParticipantSession" SET "IsFinished" = FALSE, "FinishedAt" = NULL
+                    WHERE "ParticipantId" = @pid
+                    """, conn);
+                resetCmd.Parameters.AddWithValue("pid", participantId);
+                await resetCmd.ExecuteNonQueryAsync(ct);
+                next = await GetNextUnfinishedSessionAsync(conn, participantId, ct);
+            }
+
+            // No ParticipantSession rows at all — fall back to Intro, the old default.
+            var (cycleSessionId, cycleSessionName) = next is null
+                ? (1, SessionNamesById[1])
+                : (next.Value.SessionId, next.Value.Name);
+            return new StudyLoginState(true, cycleSessionId, cycleSessionName, false, false, language, IsTestParticipant: true, TimerMinutes: timerMinutes);
         }
 
         if (usesConsentForm && !consentGiven)
@@ -135,6 +161,28 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
             return new StudyLoginState(true, null, null, false, false, language, BaselineRequired: true);
 
         return new StudyLoginState(true, nextSessionId, nextSessionName, false, false, language, TimerMinutes: timerMinutes);
+    }
+
+    /// <summary>
+    /// The participant's first unfinished study session in their own order
+    /// (<c>COALESCE(SequenceOrder, SessionId)</c>), or null when every row is finished or none exist.
+    /// </summary>
+    private static async Task<(int SessionId, string Name)?> GetNextUnfinishedSessionAsync(
+        NpgsqlConnection conn, string participantId, CancellationToken ct)
+    {
+        await using var cmd = new NpgsqlCommand(
+            """
+            SELECT ps."SessionId", s."Name"
+            FROM "ParticipantSession" ps
+            JOIN "Sessions" s ON s."Id" = ps."SessionId"
+            WHERE ps."ParticipantId" = @pid AND ps."IsFinished" = FALSE
+            ORDER BY COALESCE(ps."SequenceOrder", ps."SessionId")
+            LIMIT 1
+            """, conn);
+        cmd.Parameters.AddWithValue("pid", participantId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+        return (reader.GetInt32(0), reader.GetString(1));
     }
 
     /// <inheritdoc />
