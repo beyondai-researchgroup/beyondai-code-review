@@ -3025,6 +3025,82 @@ odvojen sistem za naloge istraživača, ne participant-facing studijski linkovi.
 (`node --check` svuda, pravi API pozivi): novi REI40 link ~7.00 dana, novi CODE_REVIEW link
 ~100.0 godina od trenutka generisanja.
 
+### Production deployment — all 8 apps live, Neon replaced with the local DB (2026-10-02)
+
+Everything that was "local Postgres only" above (025–031 migrations, Generic Task, Hybrid mode,
+Demographic Questionnaire, Post-session questionnaire, chained emails, 7-day links) is now in
+production. The six apps that had never been deployed are live for the first time.
+
+**Hosting pattern for the 6 Node/Angular apps**: Angular build on **Vercel** (team
+`beyond-ai-research`), Express API on **Render** (free, region `virginia` next to Neon `us-east-1`).
+Each repo's `vercel.json` rewrites `/api/:path*` to its Render URL, then SPA-falls back to
+`/index.html` — the Angular code's relative `/api` calls work unchanged, no CORS involved. Render
+start command is `node server.mjs` (admin: `node server/index.mjs`), build `npm ci --omit=dev`, Node
+22 (`engines`); never set `PORT`/`DB_MODE` there. `.vercelignore` keeps `.env*` and server code out of
+Vercel uploads (Vercel CLI only auto-ignores `.env.local`, **not** `.env`).
+
+| App | Frontend (Vercel) | API (Render service id) | GitHub (public) |
+|---|---|---|---|
+| Admin Dashboard | beyondai-admin.vercel.app | beyondai-admin-api (`srv-davpjq60tbcc73esvci0`) | beyondai-admin-dashboard |
+| Consent | beyondai-consent.vercel.app | beyondai-consent-api (`srv-davpjqmgekts73evrr90`) | beyondai-consent |
+| REI-40 | beyondai-survey-a.vercel.app | beyondai-survey-a-api (`srv-davpjr49v7es738n7ulg`) | beyondai-rei40 |
+| Big Five | beyondai-survey-b.vercel.app | beyondai-survey-b-api (`srv-davpjrgu01pc73fm0p90`) | beyondai-bigfive |
+| Task app | beyondai-task.vercel.app | beyondai-task-api (`srv-davpjru0tbcc73esvk1g`) | beyondai-task-app |
+| Demographics | beyondai-demographics.vercel.app | beyondai-demographics-api (`srv-davpjse7bikc73evm02g`) | beyondai-demographics |
+| Code Review AI | beyondai-code-review.vercel.app | beyondai-backend (`srv-d9gc06mpbkes73cdv87g`, oregon, Docker) | beyondai-code-review |
+| NASA-TLX | beyondai-nasa-tlx.vercel.app | (Vercel functions under `/api/db`) | beyondai-nasa-tlx |
+
+REI-40/Big Five are deliberately named `survey-a`/`survey-b` — participants see these domains in
+their emails, so the instrument names must not leak (anti-priming).
+
+**Database**: production Neon was replaced with an exact copy of the local Postgres (user's choice):
+backup of the old Neon first (`C:\Users\Andrej\Documents\neon-backups\neon-pre-deploy-2026-10-02.{sql,dump}`),
+then one `psql --single-transaction -v ON_ERROR_STOP=1` run of `DROP SCHEMA public CASCADE; CREATE
+SCHEMA public;` + `pg_dump --no-owner --no-privileges` of the local container — atomic, any error
+would have rolled back. Verified afterward: 333 columns / 33 tables / 31 sequences identical, row
+counts equal. Both sides are Postgres 18.6; pg_dump/psql run via Docker (`postgres:18` image, Neon
+**direct** host — drop `-pooler` from the hostname). Rollback = same procedure with the backup file.
+Order mattered: the new Code Review AI/NASA-TLX code needs the new schema, so the swap happened
+immediately before their redeploy.
+
+**Email in production goes through a Google Apps Script relay**, not SMTP. Render free blocks
+outbound SMTP (confirmed in Render logs: `ENETUNREACH ...:465` / `ETIMEDOUT`, requests hung until
+Vercel's 120 s proxy timeout). The Gmail API route was abandoned (the Google Cloud OAuth app could
+not be published). `server/email/mailer.mjs` (identical in admin/consent/rei40/bigfive) POSTs to the
+Apps Script web app when `MAIL_RELAY_URL`+`MAIL_RELAY_SECRET` are set and falls back to Gmail SMTP
+otherwise (local dev). Apps Script intermittently answers the first call after idling with a
+transient HTML error page, so the mailer retries non-JSON answers up to 3 times; a JSON
+`{ok:false}` is final. Quota: 100 recipients/day (consumer Gmail). Script source + setup:
+`admin-dashboard-andrejkatin/docs/email-relay-setup.md`.
+
+**Other things fixed or learned along the way**:
+- NASA-TLX `SESSION_IDS` was missing `'Hibridna sesija'` → every Hybrid TLX result 400'd. Fixed.
+- `environment.prod.ts` `consentAppUrl` was still localhost. Fixed.
+- Production Angular builds failed the 4 kB `anyComponentStyle` budget (admin global header 4.5 kB);
+  raised to 8/16 kB in all 6 apps.
+- Render can't fetch private GitHub repos unless its GitHub App is linked from the Render dashboard;
+  the user chose to make the 6 repos public instead (scanned: no secrets in history).
+- Render auto-deploy fires on push for the 6 new services, but still not for `beyondai-backend` —
+  trigger that one with `POST /v1/services/srv-d9gc06mpbkes73cdv87g/deploys`.
+- `vercel link` appends a `VERCEL_OIDC_TOKEN` to the repo's `.env.local` (existing local settings are
+  kept) and needs `.vercel` in `.gitignore`.
+- New repos (and NASA-TLX from now on) commit as `BeyondAI Research Group
+  <beyondai.researchgroup@gmail.com>` via repo-local git config — the global identity is personal.
+  NASA-TLX's older, already-public commits still carry the personal identity (left as is).
+- Tokens are passed to `git push` via `-c http.extraheader`, never stored in remote URLs.
+
+**Not working in production (free-tier limits, accepted)**: R analysis (needs `docker run`);
+`reminderJob` only runs while the admin API is awake; Render free sleeps after ~15 min idle, so the
+first API call after that waits ~15–50 s; EEG control (local Emotiv recorder) is local-only; Google
+Calendar/Forms OAuth need the new redirect URIs
+(`https://beyondai-admin.vercel.app/api/admin/{calendar,google-forms}/oauth2callback`) added in
+Google Cloud Console before they work online.
+
+Verified live end to end through the production URLs with a temporary participant on research 90
+(deleted afterward): send-consent-email → real email delivered → consent link resolves → consent
+submit → REI-40/Big Five/Demographic tokens minted with production domains (not localhost) → each
+resolves on its own app → Code Review link-login works → NASA-TLX post-session response saved.
+
 ### Next planned improvements
 - Add a `UserSecretsId` reminder to the README / onboarding docs
 - Persist session ID in `sessionStorage` so a browser refresh reconnects to the same session
