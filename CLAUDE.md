@@ -3088,6 +3088,12 @@ transient HTML error page, so the mailer retries non-JSON answers up to 3 times;
   <beyondai.researchgroup@gmail.com>` via repo-local git config — the global identity is personal.
   NASA-TLX's older, already-public commits still carry the personal identity (left as is).
 - Tokens are passed to `git push` via `-c http.extraheader`, never stored in remote URLs.
+- The GitHub token Code Review AI uses to load PRs lives **per research in the DB**
+  (`ResearchPrConfig.GitHubToken`), not in Render env vars (`GitHub__PersonalAccessToken` on Render is
+  no longer read). Right after go-live, "The provided GitHub token is invalid…" turned out to be
+  research 90's three configs holding a revoked token (401) — research 1's still-valid
+  `beyondai-researchgroup` token was copied onto them (Neon + local). Revoking that PAT breaks PR
+  loading for every research; replace it via Admin Dashboard → Task configuration.
 
 **Not working in production (free-tier limits, accepted)**: R analysis (needs `docker run`);
 `reminderJob` only runs while the admin API is awake; Render free sleeps after ~15 min idle, so the
