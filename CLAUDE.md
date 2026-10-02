@@ -3120,6 +3120,17 @@ per-type Generate route refuses REI40/BIGFIVE/DEMOGRAPHIC for an already-complet
 first click on an emailed link showed an error. Raised to 90 s. Also corrected leftover "24 hours"
 wording (emails + expired-link messages) to the real 7-day lifetime. Deployed and verified live.
 
+### Cycling test participant (005) (2026-10-02)
+
+A test participant with `IsTestParticipant` but **no** `TestFixedSessionId` now cycles through its own
+`ParticipantSession` rows instead of always landing on Intro (`StudyService.GetLoginStateAsync`): next
+unfinished row in `COALESCE(SequenceOrder, SessionId)` order, and when every row is finished all rows are
+reset (`IsFinished=FALSE`) so the next login starts again at the first one. Consent/baseline stay skipped.
+NASA-TLX `session-finished` (Vercel function + `server.ts` mirror) now flips `IsFinished` for this kind of
+test participant; fixed ones (001–004) are unchanged. 005 (research 90) has Intro (IsIntro task, PR 2) →
+AI (PR 2) → Report (PR 3), set directly in both Neon and local Postgres; no email on file by choice.
+Verified live on production: Intro → AI → Report → Intro, Report loads PR 3.
+
 ### Next planned improvements
 - Add a `UserSecretsId` reminder to the README / onboarding docs
 - Persist session ID in `sessionStorage` so a browser refresh reconnects to the same session
