@@ -11,109 +11,14 @@
   background: var(--bg-page);
 }
 
-// ── Header ────────────────────────────────────────────────────────────────────
-
-.workspace-header {
+// Per-app participant timer (2026-09-11) — hosted globally alongside the header, not inside any
+// one panel's layout.
+.study-timer-bar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1.25rem;
-  background: var(--bg-header);
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-  gap: 1rem;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  min-width: 0;
-  flex: 1;
-}
-
-// Logo served from src/assets/beyondai-favicon.svg (shared with the favicon link
-// in index.html) so the brand mark stays in sync — colors are hardcoded to the
-// dark theme palette since <img>-referenced SVGs can't read CSS custom properties.
-.nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  justify-content: flex-end;
+  padding: 6px 16px;
   flex-shrink: 0;
 }
-
-.nav-logo {
-  height: 28px;
-  width: auto;
-}
-
-.nav-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--header-text);
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-
-.header-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border);
-  flex-shrink: 0;
-}
-
-.pr-title {
-  font-size: 0.9375rem;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-muted);
-  min-width: 0;
-}
-
-.header-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-shrink: 0;
-}
-
-// ── Segmented toggle group ────────────────────────────────────────────────────
-
-.toggle-group {
-  display: flex;
-  border: 1px solid var(--header-ctrl-border);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.toggle-group__btn {
-  padding: 0.3rem 0.65rem;
-  background: transparent;
-  color: var(--header-ctrl-color);
-  border: none;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  line-height: 1.4;
-
-  &:not(:last-child) {
-    border-right: 1px solid var(--header-ctrl-border);
-  }
-
-  &--active {
-    background: var(--header-ctrl-active-bg);
-    color: var(--header-ctrl-active-color);
-    font-weight: 600;
-    cursor: default;
-  }
-
-  &:not(.toggle-group__btn--active):hover {
-    color: var(--header-ctrl-hover-color);
-  }
-}
-
 
 // ── Landing body (pr-loader wrapper) ─────────────────────────────────────────
 
@@ -225,6 +130,137 @@
 
   &--end   { right: 5px; }
   &--start { left: 5px; }
+}
+
+// ── Hybrid mode: documentation stacked over chat inside the same right-hand column ──
+//
+// The doc/chat split now happens *inside* .chat-panel (which keeps its own normal
+// [style.flex-basis.%]-driven width, exactly like Report/AI mode — the diff panel next to it is
+// completely unaffected) rather than by stealing width from a sibling panel. .hybrid-panel-stack
+// is a flex column: the documentation pane takes the full height when chat is closed, and splits
+// 50/50 with the chat pane (divided by a horizontal line) once it's opened.
+.hybrid-panel-stack {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.hybrid-panel-stack__docs {
+  // No auto-grow/shrink — its height is fully determined by flex-basis, which the template
+  // overrides via [style.flex-basis.%] once chat is open (driven by the draggable divider below);
+  // the 50% here is just the initial/fallback value before any drag has happened.
+  flex: 0 0 50%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  &--full {
+    flex: 1 1 100%;
+  }
+}
+
+.hybrid-panel-stack__divider {
+  flex: 0 0 5px;
+  cursor: row-resize;
+  background: var(--border);
+  position: relative;
+  z-index: 3;
+  transition: background 0.15s;
+  user-select: none;
+
+  &:hover {
+    background: var(--accent-dim);
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px;
+    height: 3px;
+    border-radius: 9999px;
+    background: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  &:hover::after {
+    opacity: 0.55;
+  }
+}
+
+.hybrid-panel-stack__chat {
+  // Fills whatever the docs pane above (and the 5px divider) doesn't take.
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.hybrid-panel-stack__chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--panel-title-color);
+
+  button {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--toggle-btn-border);
+    border-radius: 4px;
+    background: var(--toggle-btn-bg);
+    color: var(--toggle-btn-text);
+    cursor: pointer;
+    font-size: 0.8rem;
+    line-height: 1;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+
+    &:hover {
+      background: var(--bg-surface-alt);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+  }
+}
+
+// ── Hybrid mode: chat toggle (experimental, participant "004" only) ────────────
+// Positioned within .chat-panel itself (already `position: relative`, shared with the other
+// panels above), not fixed to the viewport — it belongs to this column, not the whole page.
+
+.hybrid-chat-fab {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 4;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid var(--toggle-btn-border);
+  background: var(--toggle-btn-bg);
+  color: var(--toggle-btn-text);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
+
+  &:hover {
+    background: var(--bg-surface-alt);
+    color: var(--accent);
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
 }
 
 .workspace-body--with-diff .panel-toggle {

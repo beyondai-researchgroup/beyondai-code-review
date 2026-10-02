@@ -7,7 +7,16 @@ namespace CodeReviewAI.Api.Models;
 public enum ReviewDecisionType
 {
     Accepted,
-    Rejected
+    Rejected,
+    /// <summary>
+    /// Per-app participant timer (2026-09-11) — recorded when the research's Code Review timer
+    /// (<c>Research.TimerCodeReviewEnabled/Minutes</c>) expired and the frontend auto-submitted
+    /// on the reviewer's behalf. Deliberately a distinct outcome, never coerced to Accepted or
+    /// Rejected — the reviewer never actually made that choice, and fabricating one would corrupt
+    /// the study's decision data. The <c>Decision</c> column has no DB CHECK constraint, so this
+    /// needs no schema change.
+    /// </summary>
+    TimedOut
 }
 
 /// <summary>

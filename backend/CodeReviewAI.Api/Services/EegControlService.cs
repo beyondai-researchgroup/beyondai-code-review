@@ -32,7 +32,11 @@ internal sealed class EegControlService : IEegControlService
         SendAsync(HttpMethod.Post, "pause", null, ct);
 
     public Task MarkerAsync(string code, CancellationToken ct) =>
-        SendAsync(HttpMethod.Post, $"marker/{Uri.EscapeDataString(code)}", null, ct);
+        // Sends this machine's own UTC clock reading along with the call — the EEG app uses it
+        // (instead of its own local clock) to stamp the marker row, so a marker's timestamp
+        // matches the activity-log CSV exactly regardless of any clock drift between the two
+        // machines when they run on separate laptops.
+        SendAsync(HttpMethod.Post, $"marker/{Uri.EscapeDataString(code)}", new { timestamp = DateTime.UtcNow }, ct);
 
     public Task StopAsync(CancellationToken ct) =>
         SendAsync(HttpMethod.Post, "stop", null, ct);

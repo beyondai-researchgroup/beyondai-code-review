@@ -7,7 +7,9 @@ import {
   ElementRef,
   AfterViewChecked,
   OnInit,
-  inject
+  inject,
+  Output,
+  EventEmitter
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MarkdownModule } from 'ngx-markdown';
@@ -31,8 +33,28 @@ const EXTENSION_TO_LANGUAGE: Record<string, string> = {
 export class ChatComponent implements OnInit, AfterViewChecked {
   readonly sessionId = input.required<string>();
 
+  /**
+   * Hybrid mode only — the AI's replies can include a `[label](#section-N)` link pointing back
+   * into the documentation pane. The backend only ever produces such links for Hybrid sessions,
+   * so this is a harmless no-op for AI/Report mode's own chat instance (no such link ever appears
+   * there); no mode flag is needed on this component.
+   */
+  @Output() sectionLinkClicked = new EventEmitter<string>();
+
   /** Mirrors the backend's MaxChatMessageLength — messages longer than this are rejected with 400. */
   readonly maxMessageLength = 8000;
+
+  /**
+   * Intro's guided-tour "ask one question" step only — caps how many messages the participant may
+   * send in this chat instance (backend enforces the same cap for session 1 — see ChatStream's own
+   * guard). Null (default) means no cap, unchanged behavior for the real AI/Report chat.
+   */
+  readonly maxMessages = input<number | null>(null);
+  readonly userMessageCount = computed(() => this.messages().filter(m => m.role === 'user').length);
+  readonly limitReached = computed(() => {
+    const max = this.maxMessages();
+    return max !== null && this.userMessageCount() >= max;
+  });
 
   private readonly sessionService = inject(SessionService);
   readonly i18n = inject(I18nService);
@@ -48,6 +70,7 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   // maxlength attribute only constrains typing, not values set from code.
   readonly sendDisabled = computed(() =>
     this.streaming() ||
+    this.limitReached() ||
     this.inputText().trim().length === 0 ||
     this.inputText().length > this.maxMessageLength
   );
@@ -68,6 +91,19 @@ export class ChatComponent implements OnInit, AfterViewChecked {
     }
   }
 
+  /** Intercepts clicks on a documentation-section link ([label](#section-N)) in a rendered AI
+   *  reply — prevents the dead in-page anchor jump and emits the section id instead, so the
+   *  parent can expand/scroll to it in the (separately rendered) documentation pane. */
+  onMessagesAreaClick(event: MouseEvent): void {
+    const anchor = (event.target as HTMLElement).closest('a');
+    const href = anchor?.getAttribute('href') ?? '';
+    const match = href.match(/^#(section-\d+)$/);
+    if (match) {
+      event.preventDefault();
+      this.sectionLinkClicked.emit(match[1]);
+    }
+  }
+
   insertQuote(quoted: QuotedCode): void {
     const lang = EXTENSION_TO_LANGUAGE[quoted.fileName.split('.').pop()?.toLowerCase() ?? ''] ?? '';
     const header = quoted.startLine === quoted.endLine
@@ -80,7 +116,7 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   }
 
   sendChip(chip: string): void {
-    if (this.streaming()) return;
+    if (this.streaming() || this.limitReached()) return;
     this.inputText.set(chip);
     this.send();
   }

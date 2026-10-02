@@ -43,13 +43,20 @@ internal sealed class SessionService : ISessionService
     /// Removes sessions whose <see cref="ReviewSession.LastActivityAt"/> is older than
     /// <paramref name="maxAge"/>. Called by <see cref="SessionCleanupService"/>.
     /// </summary>
-    internal void RemoveExpiredSessions(TimeSpan maxAge)
+    /// <returns>
+    /// The sessions actually evicted by this sweep, so the caller can finish anything that was
+    /// pending on them (persisting the activity log, for one) — an expired session is the one
+    /// path where nobody ever called DELETE, so this is the last chance to act on it.
+    /// </returns>
+    internal IReadOnlyList<ReviewSession> RemoveExpiredSessions(TimeSpan maxAge)
     {
         var cutoff = DateTime.UtcNow - maxAge;
+        var evicted = new List<ReviewSession>();
         foreach (var (id, session) in _sessions)
         {
-            if (session.LastActivityAt < cutoff)
-                _sessions.TryRemove(id, out _);
+            if (session.LastActivityAt < cutoff && _sessions.TryRemove(id, out var removed))
+                evicted.Add(removed);
         }
+        return evicted;
     }
 }

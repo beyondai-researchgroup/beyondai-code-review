@@ -1,7 +1,7 @@
 <div class="loader-card">
   <div class="loader-brand">
     <img [src]="logoSrc()" alt="BeyondAI logo" class="loader-logo" aria-hidden="true">
-    <!-- Branding text hidden for the research deployment — the study should stay blind to
+    <!-- Branding text hidden for the research deployment - the study should stay blind to
          which tool/vendor this is. Uncomment if a non-study build needs it back.
     <h1 class="loader-title">BeyondAI</h1>
     <p class="loader-subtitle">Code Review Assistant</p>
@@ -25,46 +25,50 @@
     </div>
   }
 
-  <form (ngSubmit)="login()" novalidate>
-    <div class="field">
-      <label for="participantId">{{ t().studyParticipantLabel }}</label>
-      <input
-        id="participantId"
-        type="text"
-        name="participantId"
-        [ngModel]="participantId()"
-        (ngModelChange)="participantId.set($event); onIdInput()"
-        [placeholder]="t().studyParticipantPlaceholder"
-        autocomplete="off"
-        maxlength="50"
-      />
+  @if (consentRequired()) {
+    <div class="consent-required-banner" role="alert">
+      <p class="consent-required-title">{{ t().studyConsentRequiredTitle }}</p>
+      <p class="consent-required-text">{{ t().studyConsentRequiredText }}</p>
+      <a [href]="consentAppUrl" class="consent-required-link">{{ t().studyGoToConsent }}</a>
     </div>
-
-    <div class="field">
-      <label>{{ t().studyLangLabel }}</label>
-      <div class="lang-cards">
-        <button
-          type="button"
-          class="lang-card"
-          [class.lang-card--active]="i18n.lang() === 'sr'"
-          (click)="setLang('sr')"
-        >SR — Srpski</button>
-        <button
-          type="button"
-          class="lang-card"
-          [class.lang-card--active]="i18n.lang() === 'en'"
-          (click)="setLang('en')"
-        >EN — English</button>
+  } @else if (baselineRequired()) {
+    <div class="consent-required-banner" role="alert">
+      <p class="consent-required-title">{{ t().studyBaselineRequiredTitle }}</p>
+      <p class="consent-required-text">{{ t().studyBaselineRequiredText }}</p>
+    </div>
+  } @else if (resolvingLink()) {
+    <div class="link-resolving" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      {{ t().loading }}
+    </div>
+  } @else if (linkInvalid()) {
+    <div class="error-banner" role="alert">
+      {{ t().studyLinkInvalid }}
+    </div>
+  } @else {
+    <form (ngSubmit)="login()" novalidate>
+      <div class="field">
+        <label for="participantId">{{ t().studyParticipantLabel }}</label>
+        <input
+          id="participantId"
+          type="text"
+          name="participantId"
+          [ngModel]="participantId()"
+          (ngModelChange)="participantId.set($event); onIdInput()"
+          [placeholder]="t().studyParticipantPlaceholder"
+          autocomplete="off"
+          maxlength="50"
+        />
       </div>
-    </div>
 
-    <button type="submit" class="submit-btn" [disabled]="loading()">
-      @if (loading()) {
-        <span class="spinner" aria-hidden="true"></span>
-        {{ t().loading }}
-      } @else {
-        {{ t().studyLogin }}
-      }
-    </button>
-  </form>
+      <button type="submit" class="submit-btn" [disabled]="loading()">
+        @if (loading()) {
+          <span class="spinner" aria-hidden="true"></span>
+          {{ t().loading }}
+        } @else {
+          {{ t().studyLogin }}
+        }
+      </button>
+    </form>
+  }
 </div>

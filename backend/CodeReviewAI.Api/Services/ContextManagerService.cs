@@ -25,7 +25,7 @@ internal sealed class ContextManagerService : IContextManagerService
     ];
 
     /// <inheritdoc />
-    public List<ApiMessage> BuildMessages(PrContext pr, List<ChatMessage> history, string userQuestion, string? repoContext = null, string? docsContent = null, string lang = "sr")
+    public List<ApiMessage> BuildMessages(PrContext pr, List<ChatMessage> history, string userQuestion, string? repoContext = null, string? docsContent = null, string lang = "sr", string? hybridDocContent = null)
     {
         var messages = new List<ApiMessage>();
 
@@ -57,6 +57,18 @@ internal sealed class ContextManagerService : IContextManagerService
         {
             messages.Add(new ApiMessage("user", docsBlock));
             messages.Add(new ApiMessage("assistant", L.DocsAck(lang)));
+        }
+
+        // 4c. Hybrid-mode documentation index — conditional on the caller actually being a Hybrid
+        // session (checked by ReviewSessionEndpoints, not here). Unlike the standard/spec block
+        // above, this is included on EVERY turn, not gated by trigger words — the documentation
+        // plausibly covers most PR-related questions, so gating it away would silently break the
+        // feature for most real questions.
+        var hybridDocBlock = BuildHybridDocIndexBlock(hybridDocContent, lang);
+        if (hybridDocBlock is not null)
+        {
+            messages.Add(new ApiMessage("user", hybridDocBlock));
+            messages.Add(new ApiMessage("assistant", L.HybridDocAck(lang)));
         }
 
         // 5. Conversation history — last N messages only.
@@ -268,12 +280,72 @@ internal sealed class ContextManagerService : IContextManagerService
         return sb.ToString().TrimEnd();
     }
 
+    /// <summary>
+    /// Experimental Hybrid mode only — builds an index of the documentation's `##` sections (with
+    /// their positional ids) plus their full content, so the AI can accurately decide whether a
+    /// section answers the current question and reference it by the exact id the documentation
+    /// pane itself uses. Returns <c>null</c> when there's no documentation content to index (e.g.
+    /// nothing generated yet on the dynamic, non-static-report path).
+    /// </summary>
+    private static string? BuildHybridDocIndexBlock(string? hybridDocContent, string lang)
+    {
+        if (string.IsNullOrWhiteSpace(hybridDocContent))
+            return null;
+
+        var sections = ReportSectionSplitter.Split(hybridDocContent);
+        if (sections.Count == 0)
+            return null;
+
+        var sb = new StringBuilder();
+        sb.AppendLine(L.HybridDocHeading(lang));
+        sb.AppendLine();
+        sb.AppendLine(L.HybridDocInstruction(lang));
+        sb.AppendLine();
+
+        foreach (var (id, title, body) in sections)
+        {
+            sb.AppendLine($"({id}) ## {title}");
+            sb.AppendLine(body);
+            sb.AppendLine();
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
     /// <summary>Language-specific string helpers.</summary>
     private static class L
     {
         public static string DocsAck(string lang) => lang == "en"
             ? "Understood. I have reviewed the referenced standard/specification."
             : "Razumem. Pregledao sam referentni standard/specifikaciju.";
+
+        public static string HybridDocHeading(string lang) => lang == "en"
+            ? "## Documentation shown to the user alongside this chat"
+            : "## Dokumentacija prikazana korisniku uporedo sa ovim razgovorom";
+
+        public static string HybridDocInstruction(string lang) => lang == "en"
+            ? "The user is currently viewing the technical documentation below, split into "
+              + "numbered sections (section-1, section-2, ...), at the same time as this chat. "
+              + "RULE: if your answer to the user's question is partly or fully covered by one of "
+              + "these sections, end your answer with one line in EXACTLY this markdown format "
+              + "(do not alter it or add extra text inside the brackets): "
+              + "[More information: <exact section title>](#<exact section id>) — use only a "
+              + "title/id pair that actually appears below, never invent one. If no section is "
+              + "genuinely relevant to the question, do not add any reference at all."
+            : "Korisnik trenutno gleda tehničku dokumentaciju ispod, podeljenu na numerisane "
+              + "sekcije (section-1, section-2, ...), uporedo sa ovim razgovorom. PRAVILO: ako "
+              + "tvoj odgovor na pitanje korisnika delimično ili u potpunosti pokriva neka od "
+              + "ovih sekcija, na samom kraju odgovora dodaj JEDNU liniju u TAČNO ovom markdown "
+              + "formatu (ne menjaj ga niti dodaji dodatni tekst unutar zagrada): "
+              + "[Više informacija: <tačan naziv sekcije>](#<tačan id sekcije>) — koristi ISKLJUČIVO "
+              + "naziv/id koji se stvarno pojavljuje ispod, nemoj izmišljati. Ako nijedna sekcija "
+              + "nije zaista relevantna za pitanje, ne dodaji nikakvu referencu.";
+
+        public static string HybridDocAck(string lang) => lang == "en"
+            ? "Understood. I have reviewed the documentation shown to the user and will reference "
+              + "a specific section when relevant, using the exact format given."
+            : "Razumem. Pregledao sam dokumentaciju prikazanu korisniku i referenciraću konkretnu "
+              + "sekciju kada je relevantno, koristeći tačno dati format.";
 
         public static string RepoContextAck(string lang) => lang == "en"
             ? "Understood. I have studied the repository structure and key files and am ready to answer questions about the project."

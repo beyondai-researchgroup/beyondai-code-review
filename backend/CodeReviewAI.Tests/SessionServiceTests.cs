@@ -51,4 +51,23 @@ public class SessionServiceTests
         var result = await service.GetSessionAsync(session.Id);
         Assert.NotNull(result);
     }
+
+    [Fact]
+    public async Task RemoveExpiredSessions_ReturnsOnlyTheEvictedSessions()
+    {
+        // SessionCleanupService persists each evicted session's activity log, so it depends on
+        // getting exactly the evicted ones back — a retained session leaking into this list would
+        // mean writing a still-running session's log to the database prematurely.
+        var service = new SessionService();
+        var expired = await service.CreateSessionAsync();
+        var active = await service.CreateSessionAsync();
+
+        expired.LastActivityAt = DateTime.UtcNow.AddHours(-3);
+        await service.UpdateSessionAsync(expired);
+
+        var evicted = service.RemoveExpiredSessions(TimeSpan.FromHours(2));
+
+        Assert.Equal(expired.Id, Assert.Single(evicted).Id);
+        Assert.NotNull(await service.GetSessionAsync(active.Id));
+    }
 }

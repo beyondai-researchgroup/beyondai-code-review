@@ -34,6 +34,8 @@ internal static class ReviewSessionEndpoints
         group.MapPost("/{sessionId}/report/generate", GenerateReport);
         group.MapPost("/{sessionId}/mode", SwitchMode);
         group.MapPost("/{sessionId}/decision", SubmitDecision);
+        group.MapPost("/{sessionId}/hybrid/section-event", RecordHybridSectionEvent);
+        group.MapPost("/{sessionId}/activity-log", RecordActivity);
         group.MapDelete("/{sessionId}", DeleteSession);
 
         return app;
@@ -189,6 +191,7 @@ internal static class ReviewSessionEndpoints
         IContextManagerService contextManager,
         IClaudeService claude,
         IStudyService study,
+        IActivityLogService activityLog,
         IConfiguration config,
         HttpContext http,
         CancellationToken ct)
@@ -219,6 +222,10 @@ internal static class ReviewSessionEndpoints
             return;
         }
 
+        activityLog.LogEvent(
+            session.ActivityLogFilePath, session.ParticipantId ?? "", session.StudySessionId ?? 0, session.Mode,
+            "ChatMessageSent", body.Message, DateTime.UtcNow, DateTime.UtcNow);
+
         // Rate limiting (user questions only) and the history mutation happen atomically
         // under the session lock, so two concurrent requests can neither both slip past
         // the limit nor corrupt the History list.
@@ -236,8 +243,19 @@ internal static class ReviewSessionEndpoints
             }
             else
             {
+                // Experimental Hybrid mode only — feeds the AI the same documentation content the
+                // participant sees alongside chat, so it can reference a specific section back.
+                // Mirrors exactly what the documentation pane itself renders: the static demo doc
+                // when that override is on (always true for Hybrid mode locally), else whatever
+                // was last generated for this session (null if nothing yet — block just omitted).
+                string? hybridDocContent = session.Mode == ReviewMode.Hybrid
+                    ? (config.GetValue<bool>("Session:UseStaticReport")
+                        ? StaticReportContent.Get(body.Lang)
+                        : session.GeneratedReport)
+                    : null;
+
                 // Build messages before mutating history to avoid duplicating the current question.
-                apiMessages = contextManager.BuildMessages(session.PrContext, session.History, body.Message, session.RepoContext, session.DocsContent, body.Lang);
+                apiMessages = contextManager.BuildMessages(session.PrContext, session.History, body.Message, session.RepoContext, session.DocsContent, body.Lang, hybridDocContent);
 
                 // Persist the user turn immediately so it survives a mid-stream disconnect.
                 session.History.Add(userMessage);
@@ -271,6 +289,7 @@ internal static class ReviewSessionEndpoints
         http.Response.Headers["X-Accel-Buffering"] = "no";
 
         var fullResponse = new StringBuilder();
+        var aiResponseStartedAt = DateTime.UtcNow;
         try
         {
             await foreach (var chunk in claude.StreamResponseAsync(apiMessages, ct, ClaudeService.GetSystemPrompt(body.Lang)))
@@ -309,6 +328,13 @@ internal static class ReviewSessionEndpoints
                 await study.SaveChatMessageAsync(
                     session.ParticipantId, session.StudySessionId.Value, "assistant", fullResponse.ToString(),
                     CancellationToken.None);
+            }
+
+            if (fullResponse.Length > 0)
+            {
+                activityLog.LogEvent(
+                    session.ActivityLogFilePath, session.ParticipantId ?? "", session.StudySessionId ?? 0, session.Mode,
+                    "ChatMessageReceived", fullResponse.ToString(), aiResponseStartedAt, DateTime.UtcNow);
             }
         }
     }
@@ -375,10 +401,12 @@ internal static class ReviewSessionEndpoints
         ISessionService sessions,
         IContextManagerService contextManager,
         IClaudeService claude,
+        IActivityLogService activityLog,
         IConfiguration config,
         HttpContext http,
         CancellationToken ct)
     {
+        var reportRequestStartedAt = DateTime.UtcNow;
         var session = await sessions.GetSessionAsync(sessionId);
         if (session is null)
         {
@@ -387,7 +415,7 @@ internal static class ReviewSessionEndpoints
             return;
         }
 
-        if (session.Mode != ReviewMode.Report)
+        if (session.Mode != ReviewMode.Report && session.Mode != ReviewMode.Hybrid)
         {
             http.Response.StatusCode = StatusCodes.Status400BadRequest;
             await http.Response.WriteAsJsonAsync(new { error = "This session is not in Report mode." }, ct);
@@ -405,6 +433,23 @@ internal static class ReviewSessionEndpoints
         http.Response.Headers.CacheControl = "no-cache";
         http.Response.Headers["X-Accel-Buffering"] = "no";
 
+        // Intro session (StudySessionId 1) always gets the short companion doc, regardless of
+        // Session:UseStaticReport — a first-time participant needs something they can realistically
+        // read start to finish during the guided tour, not the full multi-thousand-word report
+        // real Report/Hybrid sessions serve. Takes priority over every other branch below.
+        if (session.StudySessionId == 1)
+        {
+            var introDoc = StaticIntroReportContent.Get(lang ?? "sr");
+            var introPayload = JsonSerializer.Serialize(new { text = introDoc });
+            await http.Response.WriteAsync($"data: {introPayload}\n\n", ct);
+            await http.Response.WriteAsync("data: [DONE]\n\n", ct);
+            await http.Response.Body.FlushAsync(ct);
+            activityLog.LogEvent(
+                session.ActivityLogFilePath, session.ParticipantId ?? "", session.StudySessionId ?? 0, session.Mode,
+                "DocumentationGenerated", $"intro-static, {introDoc.Length} chars", reportRequestStartedAt, DateTime.UtcNow);
+            return;
+        }
+
         // Test/demo override — serves a predefined technical document instead of calling Claude.
         // The dynamic AI generation path below is left intact; flip Session:UseStaticReport off
         // in configuration to restore live report generation.
@@ -415,6 +460,9 @@ internal static class ReviewSessionEndpoints
             await http.Response.WriteAsync($"data: {staticPayload}\n\n", ct);
             await http.Response.WriteAsync("data: [DONE]\n\n", ct);
             await http.Response.Body.FlushAsync(ct);
+            activityLog.LogEvent(
+                session.ActivityLogFilePath, session.ParticipantId ?? "", session.StudySessionId ?? 0, session.Mode,
+                "DocumentationGenerated", $"static, {staticDoc.Length} chars", reportRequestStartedAt, DateTime.UtcNow);
             return;
         }
 
@@ -425,6 +473,9 @@ internal static class ReviewSessionEndpoints
             await http.Response.WriteAsync($"data: {cached}\n\n", ct);
             await http.Response.WriteAsync("data: [DONE]\n\n", ct);
             await http.Response.Body.FlushAsync(ct);
+            activityLog.LogEvent(
+                session.ActivityLogFilePath, session.ParticipantId ?? "", session.StudySessionId ?? 0, session.Mode,
+                "DocumentationGenerated", $"cached, {session.GeneratedReport.Length} chars", reportRequestStartedAt, DateTime.UtcNow);
             return;
         }
 
@@ -452,6 +503,9 @@ internal static class ReviewSessionEndpoints
             session.GeneratedReport = fullReport.ToString();
             session.LastActivityAt = DateTime.UtcNow;
             await sessions.UpdateSessionAsync(session);
+            activityLog.LogEvent(
+                session.ActivityLogFilePath, session.ParticipantId ?? "", session.StudySessionId ?? 0, session.Mode,
+                "DocumentationGenerated", $"AI-generated, {fullReport.Length} chars", reportRequestStartedAt, DateTime.UtcNow);
         }
     }
 
@@ -498,7 +552,8 @@ internal static class ReviewSessionEndpoints
         SubmitDecisionRequest body,
         ISessionService sessions,
         IStudyService study,
-        IEegControlService eeg)
+        IEegControlService eeg,
+        IActivityLogService activityLog)
     {
         var session = await sessions.GetSessionAsync(sessionId);
         if (session is null)
@@ -538,16 +593,150 @@ internal static class ReviewSessionEndpoints
 
         await eeg.MarkerAsync("DECISION", CancellationToken.None);
 
-        return Results.Ok(decision);
+        activityLog.LogEvent(
+            session.ActivityLogFilePath, session.ParticipantId ?? "", session.StudySessionId ?? 0, session.Mode,
+            "DecisionSubmitted", $"{decision.Decision}: {decision.Comment}", decision.DecidedAt, decision.DecidedAt);
+
+        // Persist the finished log to the shared study DB. Deliberately after the LogEvent above,
+        // so the decision row itself is part of what gets stored. Best-effort, like every other
+        // study-persistence call here; DeleteSession upserts over this again on teardown.
+        if (session.ParticipantId is not null && session.StudySessionId is not null)
+        {
+            await study.SaveActivityLogAsync(
+                session.ActivityLogFilePath, session.ParticipantId, session.StudySessionId.Value,
+                session.Mode, CancellationToken.None);
+        }
+
+        // A real (non-test) participant gets an opaque NASA-TLX handoff token instead of their
+        // raw participant id/session number in the redirect URL — null for a test participant
+        // (no personal link to speak of; the frontend falls back to the legacy query-param shape)
+        // and best-effort null on any DB failure (see IssueTlxHandoffTokenAsync).
+        string? handoffToken = null;
+        if (!session.IsTestParticipant && session.ParticipantId is not null && session.StudySessionId is not null)
+        {
+            handoffToken = await study.IssueTlxHandoffTokenAsync(session.ParticipantId, session.StudySessionId.Value, CancellationToken.None);
+        }
+
+        return Results.Ok(new { decision.Decision, decision.Comment, decision.DecidedAt, handoffToken });
     }
+
+    // ── POST /api/session/{sessionId}/hybrid/section-event ──────────────────
+
+    /// <summary>
+    /// Records one expand/collapse event (and, on collapse, the dwell duration) for a Hybrid-mode
+    /// documentation accordion section — best-effort, persisted to the shared study database.
+    /// The frontend only ever calls this for Hybrid sessions (gated by ReportViewComponent's own
+    /// `trackEngagement` input — Report mode is sectioned too now but never sets it); no
+    /// server-side mode check is needed since a stray call from another mode is harmless (just an
+    /// extra best-effort row keyed by whatever StudySessionId the session actually has).
+    /// </summary>
+    private static async Task<IResult> RecordHybridSectionEvent(
+        string sessionId,
+        HybridSectionEventRequest body,
+        ISessionService sessions,
+        IStudyService study,
+        IActivityLogService activityLog)
+    {
+        var session = await sessions.GetSessionAsync(sessionId);
+        if (session is null)
+            return Results.NotFound(new { error = "Session not found.", detail = sessionId });
+
+        if (string.IsNullOrWhiteSpace(body.SectionId) || string.IsNullOrWhiteSpace(body.SectionTitle))
+            return Results.BadRequest(new { error = "SectionId and SectionTitle are required." });
+
+        if (session.ParticipantId is not null && session.StudySessionId is not null)
+        {
+            await study.SaveHybridSectionEventAsync(
+                session.ParticipantId, session.StudySessionId.Value,
+                body.SectionId, body.SectionTitle, body.Action, body.DurationSeconds,
+                CancellationToken.None);
+        }
+
+        // Also mirrored into the general activity-log CSV (unlike the DB write above, this applies
+        // to section engagement in ANY mode — Report mode is sectioned too now but has no DB row).
+        var now = DateTime.UtcNow;
+        var startedAt = body.DurationSeconds.HasValue ? now.AddSeconds(-body.DurationSeconds.Value) : now;
+        activityLog.LogEvent(
+            session.ActivityLogFilePath, session.ParticipantId ?? "", session.StudySessionId ?? 0, session.Mode,
+            $"Section{body.Action}", body.SectionTitle, startedAt, now);
+
+        return Results.Ok();
+    }
+
+    // ── POST /api/session/{sessionId}/activity-log ───────────────────────────
+
+    /// <summary>
+    /// Records one general participant activity entry (a click, a resize, a search, ...) to the
+    /// session's activity-log CSV file — best-effort, local-dev-only (see
+    /// <see cref="IActivityLogService"/>). No-ops (still 200 OK) when activity logging is disabled
+    /// or this session has no study context.
+    /// </summary>
+    private static async Task<IResult> RecordActivity(
+        string sessionId,
+        ActivityLogRequest body,
+        ISessionService sessions,
+        IActivityLogService activityLog,
+        IEegControlService eeg)
+    {
+        var session = await sessions.GetSessionAsync(sessionId);
+        if (session is null)
+            return Results.NotFound(new { error = "Session not found.", detail = sessionId });
+
+        if (string.IsNullOrWhiteSpace(body.EventType))
+            return Results.BadRequest(new { error = "EventType is required." });
+
+        activityLog.LogEvent(
+            session.ActivityLogFilePath, session.ParticipantId ?? "", session.StudySessionId ?? 0, session.Mode,
+            body.EventType, body.Detail, body.StartedAt ?? DateTime.UtcNow, body.EndedAt);
+
+        // Client-side moments that also drop a phase marker into the EEG recording — the client keeps
+        // sending one event stream, and only this whitelisted mapping ever reaches the EEG app.
+        if (EegMarkerForActivity.TryGetValue(body.EventType, out var eegMarker))
+            await eeg.MarkerAsync(eegMarker, CancellationToken.None);
+
+        return Results.Ok();
+    }
+
+    private static readonly Dictionary<string, string> EegMarkerForActivity = new()
+    {
+        // Participant clicked "Donesi odluku", i.e. started deciding (DECISION follows on submit).
+        ["FinishModalOpened"] = "DECISION_OPENED"
+    };
 
     // ── DELETE /api/session/{sessionId} ──────────────────────────────────────
 
     /// <summary>Deletes a session immediately.</summary>
     private static async Task<IResult> DeleteSession(
         string sessionId,
-        ISessionService sessions)
+        ISessionService sessions,
+        IActivityLogService activityLog,
+        IStudyService study)
     {
+        var session = await sessions.GetSessionAsync(sessionId);
+        if (session is not null && session.ActivityLogFilePath is not null && session.ParticipantId is not null)
+        {
+            activityLog.LogEvent(
+                session.ActivityLogFilePath, session.ParticipantId, session.StudySessionId ?? 0, session.Mode,
+                "SessionEnded", null, DateTime.UtcNow, DateTime.UtcNow);
+
+            // Final persist of the complete log, including the SessionEnded row just written.
+            // This is the path that also catches a participant who never submitted a decision
+            // (abandoned or timed out), since SubmitDecision's own call never ran for them.
+            // Upserts over whatever SubmitDecision already stored, by design.
+            if (session.StudySessionId is not null)
+            {
+                await study.SaveActivityLogAsync(
+                    session.ActivityLogFilePath, session.ParticipantId, session.StudySessionId.Value,
+                    session.Mode, CancellationToken.None);
+            }
+
+            // Session is genuinely done now — free the in-memory CSV buffer. Safe even if
+            // SaveActivityLogAsync above threw internally (it never rethrows), since the content
+            // either made it to Postgres/R2 or didn't; either way nothing else will ever append
+            // to this log again.
+            activityLog.ReleaseLog(session.ActivityLogFilePath);
+        }
+
         await sessions.DeleteSessionAsync(sessionId);
         return Results.NoContent();
     }

@@ -2,11 +2,11 @@
 
 ## Summary
 
-Code Review AI Assistant is a web application that fetches GitHub Pull Request data and streams an AI-generated educational analysis to the user. The developer always makes the final approve/reject decision — the AI only explains and evaluates.
+Code Review AI Assistant is a web application that fetches GitHub Pull Request data and streams an AI-generated educational analysis to the user. The developer always makes the final approve/reject decision - the AI only explains and evaluates.
 
 ## Components
 
-### Backend — ASP.NET Core 8 (`/backend`)
+### Backend - ASP.NET Core 8 (`/backend`)
 - Minimal API style, no controllers
 - Receives a GitHub PR URL from the frontend
 - Uses **Octokit.net** (read-only PAT) to fetch PR metadata, file diffs, and commit messages
@@ -14,7 +14,7 @@ Code Review AI Assistant is a web application that fetches GitHub Pull Request d
 - Streams the response back to the frontend via **Server-Sent Events (SSE)**
 - Configuration lives in `appsettings.json`; secrets supplied via environment variables (never committed)
 
-### Frontend — Angular 17+ (`/frontend`)
+### Frontend - Angular 17+ (`/frontend`)
 - Standalone components, Signals for state management
 - Single-page: PR URL input → streaming analysis view
 - Renders AI response as Markdown using **ngx-markdown** + **Prism.js** for code highlighting

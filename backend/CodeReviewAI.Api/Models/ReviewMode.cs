@@ -12,5 +12,10 @@ public enum ReviewMode
     Ai,
 
     /// <summary>Single-shot report — the AI generates one comprehensive report, no further interaction.</summary>
-    Report
+    Report,
+
+    /// <summary>Experimental — the same static report split into collapsible accordion sections,
+    /// plus a togglable chat drawer. Restricted to test participant "004" via
+    /// Participant.TestFixedSessionId. Local dev only.</summary>
+    Hybrid
 }

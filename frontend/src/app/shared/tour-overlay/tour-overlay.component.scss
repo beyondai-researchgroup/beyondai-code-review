@@ -98,7 +98,12 @@
   background: var(--btn-bg);
   color: var(--btn-text);
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--btn-bg-hover);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }

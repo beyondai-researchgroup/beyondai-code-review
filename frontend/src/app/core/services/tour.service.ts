@@ -19,6 +19,15 @@ export interface TourStep {
    * mandatory and must not be skippable.
    */
   hideNav?: boolean;
+  /**
+   * When present, gates the tooltip's own "Next" button — disabled while this returns false.
+   * Re-evaluated reactively (call it from a template/computed context, i.e. it should read a
+   * signal) so the button enables itself the moment the underlying condition becomes true, with
+   * no participant action needed to "refresh" it. hideNav takes precedence (no Next button to
+   * gate at all) — use canAdvance when Skip/Back should stay usable but Next specifically
+   * shouldn't jump ahead yet (e.g. waiting for a real AI reply to finish streaming).
+   */
+  canAdvance?: () => boolean;
   /** Runs just before the step is shown — e.g. select a file, expand a panel, open a modal. */
   beforeShow?: () => void;
   /** Runs when leaving this step (forward, back, skip, or on tour end while on this step). */
@@ -43,6 +52,8 @@ export class TourService {
   readonly currentStep = computed<TourStep | null>(() => this._steps()[this._index()] ?? null);
   readonly isFirst = computed(() => this._index() === 0);
   readonly isLast = computed(() => this._index() === this._steps().length - 1);
+  /** True when there's no gate, or the current step's own gate says it's fine to advance. */
+  readonly canAdvance = computed(() => this.currentStep()?.canAdvance?.() ?? true);
 
   start(steps: TourStep[]): void {
     if (steps.length === 0) return;
@@ -53,6 +64,7 @@ export class TourService {
   }
 
   next(): void {
+    if (!this.canAdvance()) return;
     const steps = this._steps();
     const i = this._index();
     if (i >= steps.length - 1) {

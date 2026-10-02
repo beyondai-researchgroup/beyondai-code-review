@@ -1,5 +1,5 @@
 <div class="chat-container">
-  <div class="messages-area">
+  <div class="messages-area" (click)="onMessagesAreaClick($event)">
     @if (messages().length === 0) {
       <div class="empty-state">
         <p>{{ t().chatEmpty }}</p>
@@ -32,7 +32,7 @@
       <button
         class="chip"
         type="button"
-        [disabled]="streaming() || loadingSuggestions()"
+        [disabled]="streaming() || loadingSuggestions() || limitReached()"
         (click)="sendChip(chip)"
       >{{ chip }}</button>
     }
@@ -46,8 +46,8 @@
         [value]="inputText()"
         (input)="inputText.set($any($event.target).value)"
         (keydown)="onEnter($event)"
-        [disabled]="streaming()"
-        [placeholder]="t().chatPlaceholder"
+        [disabled]="streaming() || limitReached()"
+        [placeholder]="limitReached() ? t().chatLimitReached : t().chatPlaceholder"
         [attr.maxlength]="maxMessageLength"
         rows="2"
       ></textarea>

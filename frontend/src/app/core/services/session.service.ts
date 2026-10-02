@@ -14,13 +14,31 @@ interface SessionCreatedResponse {
 
 export interface StudyLoginResponse {
   allFinished: boolean;
+  consentRequired?: boolean;
+  /** True when the next session is this participant's first experimental session and the
+   *  researcher hasn't marked the baseline (EEG) measurement done yet in the Admin Dashboard —
+   *  nothing for the participant to do but wait. */
+  baselineRequired?: boolean;
+  /** Only present on a link-login response — Login's own caller already knows the id (they typed
+   *  it); LinkLogin's caller only ever held an opaque token, never the participant id itself. */
+  participantId?: string;
   sessionId?: number;
   sessionName?: string;
+  /** Locked once at the Consent app (Participant.Language) — applied instead of a picker here. */
+  language?: 'sr' | 'en';
+  /** Per-app participant timer (2026-09-11) — null when disabled. StartReviewResponse's own copy
+   *  is the one actually applied (see study-login.component.ts); this is just shape parity. */
+  timerMinutes?: number | null;
+  /** Whether this participant is a fixed, repeatable-use test participant — false/absent for
+   *  every real participant, who only ever reached this response via a personal link. */
+  isTestParticipant?: boolean;
 }
 
 export interface StartReviewResponse {
   sessionId: string;
   summary: PrSummaryResponse;
+  /** Per-app participant timer (2026-09-11) — null when disabled. */
+  timerMinutes?: number | null;
 }
 
 interface LoadPrRequest {
@@ -261,9 +279,52 @@ export class SessionService {
     return this.http.delete<void>(`${this.apiUrl}/${sessionId}`);
   }
 
+  /**
+   * Records one expand/collapse event for a Hybrid-mode documentation accordion section.
+   * Best-effort, fire-and-forget — never blocks the participant. Uses a raw `fetch` with
+   * `keepalive: true` (not HttpClient, which has no such option) so the call survives a
+   * `beforeunload`/hard-navigation moment, e.g. flushing a still-open section right as the
+   * decision-submit handoff redirects away from this app.
+   */
+  recordHybridSectionEvent(
+    sessionId: string,
+    payload: { sectionId: string; sectionTitle: string; action: 'Expand' | 'Collapse'; durationSeconds?: number }
+  ): void {
+    fetch(`${this.apiUrl}/${sessionId}/hybrid/section-event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true
+    }).catch(() => { /* best-effort, never blocks the participant */ });
+  }
+
+  /**
+   * Records one participant activity entry (a click, a resize, a search, ...) to the session's
+   * activity-log CSV file (local-dev-only; a silent no-op backend-side when disabled). Best-effort,
+   * fire-and-forget — same `fetch` + `keepalive: true` pattern as `recordHybridSectionEvent` above,
+   * since some callers (e.g. a `beforeunload` flush) need the call to survive a hard navigation.
+   */
+  recordActivity(
+    sessionId: string,
+    event: { eventType: string; detail?: string | null; startedAt?: Date; endedAt?: Date | null }
+  ): void {
+    fetch(`${this.apiUrl}/${sessionId}/activity-log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: event.eventType,
+        detail: event.detail ?? null,
+        startedAt: (event.startedAt ?? new Date()).toISOString(),
+        endedAt: event.endedAt ? event.endedAt.toISOString() : null
+      }),
+      keepalive: true
+    }).catch(() => { /* best-effort, never blocks the participant */ });
+  }
+
   // ── Study flow ────────────────────────────────────────────────────────────
 
-  /** Validates the participant and returns their next unfinished study session. */
+  /** Validates the participant and returns their next unfinished study session. Test participants
+   *  only — every other participant logs in via {@link studyLinkLogin} instead. */
   studyLogin(participantId: string): Observable<StudyLoginResponse> {
     return this.http.post<StudyLoginResponse>(
       `${environment.apiUrl}/study/login`,
@@ -271,11 +332,27 @@ export class SessionService {
     );
   }
 
-  /** Creates a review session preloaded with the configured demo PR in the given mode. */
-  studyStartReview(participantId: string, reviewMode: ReviewMode, lang: string): Observable<StartReviewResponse> {
+  /** Resolves a personal-link token and logs in exactly like {@link studyLogin} — the only entry
+   *  point for every non-test participant. */
+  studyLinkLogin(token: string): Observable<StudyLoginResponse> {
+    return this.http.post<StudyLoginResponse>(
+      `${environment.apiUrl}/study/link-login`,
+      { token }
+    );
+  }
+
+  /** Creates a review session preloaded with the configured demo PR in the given mode. `linkToken`
+   *  is required (and re-validated server-side) for every non-test participant; omit for a test
+   *  participant, who has no personal link. */
+  studyStartReview(
+    participantId: string,
+    reviewMode: ReviewMode,
+    lang: string,
+    linkToken: string | null = null
+  ): Observable<StartReviewResponse> {
     return this.http.post<StartReviewResponse>(
       `${environment.apiUrl}/study/start-review`,
-      { participantId, reviewMode, lang }
+      { participantId, reviewMode, lang, linkToken }
     );
   }
 }

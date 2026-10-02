@@ -197,6 +197,60 @@
   }
 }
 
+// ── Hybrid mode: collapsible accordion sections ─────────────────────────────
+
+.report-view__preamble {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.report-view__section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 0.6rem;
+  overflow: hidden;
+  background: var(--bg-surface-alt, var(--diff-bg));
+}
+
+.report-view__section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary);
+  font: inherit;
+  transition: background 0.15s;
+
+  &:hover {
+    background: var(--file-item-hover);
+  }
+}
+
+.report-view__section-chevron {
+  flex-shrink: 0;
+  width: 1rem;
+  color: var(--accent);
+  font-size: 0.75rem;
+}
+
+.report-view__section-title {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.report-view__section-body {
+  padding: 0 1rem 1rem 2.5rem;
+
+  &.report-view__section-body--collapsed {
+    display: none;
+  }
+}
+
 .report-view__disclaimer {
   flex-shrink: 0;
   margin: 0;

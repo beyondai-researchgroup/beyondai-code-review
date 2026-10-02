@@ -27,11 +27,17 @@ public interface IContextManagerService
     /// repository's Docs folder. Only included when <paramref name="userQuestion"/> appears
     /// to be asking about a standard — see the implementation's trigger-word check.
     /// </param>
+    /// <param name="hybridDocContent">
+    /// Experimental Hybrid mode only — the same documentation markdown shown in the participant's
+    /// documentation pane. When provided, an index of its `##` sections (id, title, content) is
+    /// included every turn so the AI can point back to a specific section via a
+    /// <c>[label](#section-N)</c> link when relevant. Always <c>null</c> outside Hybrid sessions.
+    /// </param>
     /// <returns>
     /// An ordered list of <see cref="ApiMessage"/> objects ready to be serialised
     /// and sent to the Anthropic Messages API.
     /// </returns>
-    List<ApiMessage> BuildMessages(PrContext pr, List<ChatMessage> history, string userQuestion, string? repoContext = null, string? docsContent = null, string lang = "sr");
+    List<ApiMessage> BuildMessages(PrContext pr, List<ChatMessage> history, string userQuestion, string? repoContext = null, string? docsContent = null, string lang = "sr", string? hybridDocContent = null);
 
     /// <summary>
     /// Constructs the message list for a single-shot PR report.

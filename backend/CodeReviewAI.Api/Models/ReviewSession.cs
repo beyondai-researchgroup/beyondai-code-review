@@ -96,4 +96,20 @@ public class ReviewSession
     /// table, set alongside <see cref="ParticipantId"/>.
     /// </summary>
     public int? StudySessionId { get; set; }
+
+    /// <summary>
+    /// Full path to this session's activity-log CSV file (see <see cref="Services.IActivityLogService"/>),
+    /// set once in <c>StudyEndpoints.StartReview</c>. Null when activity logging is disabled
+    /// (no <c>ActivityLog:Directory</c> configured — always true in production) or for the
+    /// (now unused) classic repo/PR/token loader flow, which never has study context either.
+    /// </summary>
+    public string? ActivityLogFilePath { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="ParticipantId"/> is a fixed test participant (<c>Participant.IsTestParticipant</c>),
+    /// set alongside it in <c>StudyEndpoints.StartReview</c>. Drives the NASA-TLX handoff shape on
+    /// decision submit — a test participant keeps the legacy query-param handoff (no personal link
+    /// to speak of), a real one gets an opaque <c>TLX_HANDOFF</c> token instead.
+    /// </summary>
+    public bool IsTestParticipant { get; set; }
 }

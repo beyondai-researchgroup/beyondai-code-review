@@ -1,55 +1,12 @@
 <div class="app-shell">
 
-  <header class="workspace-header">
-    <div class="header-left">
-      <div class="nav-brand">
-        <img [src]="logoSrc()" alt="BeyondAI logo" class="nav-logo" aria-hidden="true">
-        <span class="nav-title">BeyondAI Research Group</span>
-      </div>
-      @if (sessionId()) {
-        <span class="header-divider" aria-hidden="true"></span>
-        <span class="pr-title">{{ prTitle() }}</span>
-      }
+  <app-global-header [prTitle]="sessionId() ? prTitle() : null"></app-global-header>
+
+  @if (sessionId() && timerMinutes() !== null && !reviewFinished()) {
+    <div class="study-timer-bar">
+      <app-timer-display [minutes]="timerMinutes()!" (expired)="onTimerExpired()"></app-timer-display>
     </div>
-    <div class="header-controls">
-
-      <div class="toggle-group" [attr.aria-label]="'Tema'">
-        <button
-          class="toggle-group__btn"
-          type="button"
-          [class.toggle-group__btn--active]="themeService.theme() === 'dark'"
-          (click)="setTheme('dark')"
-          title="Tamna tema / Dark theme"
-        >☾</button>
-        <button
-          class="toggle-group__btn"
-          type="button"
-          [class.toggle-group__btn--active]="themeService.theme() === 'light'"
-          (click)="setTheme('light')"
-          title="Svetla tema / Light theme"
-        >☀</button>
-      </div>
-
-      <!-- Language toggle disabled for the study flow: the language is chosen once
-           on the study login page and locked. Re-enable by uncommenting if needed.
-      <div class="toggle-group" [attr.aria-label]="'Jezik / Language'">
-        <button
-          class="toggle-group__btn"
-          type="button"
-          [class.toggle-group__btn--active]="i18n.lang() === 'sr'"
-          (click)="setLang('sr')"
-        >SR</button>
-        <button
-          class="toggle-group__btn"
-          type="button"
-          [class.toggle-group__btn--active]="i18n.lang() === 'en'"
-          (click)="setLang('en')"
-        >EN</button>
-      </div>
-      -->
-
-    </div>
-  </header>
+  }
 
   @if (!sessionId()) {
     <div class="landing-body">
@@ -130,10 +87,53 @@
           (click)="chatCollapsed.set(!chatCollapsed())"
           [title]="chatCollapsed() ? t().expandChat : t().collapseChat"
         >{{ chatCollapsed() ? '‹' : '›' }}</button>
-        @if (reviewMode() === ReviewMode.Report) {
-          <app-report-view [sessionId]="sessionId()!" />
+        @if (reviewMode() === ReviewMode.Hybrid) {
+          <div class="hybrid-panel-stack">
+            <div
+              class="hybrid-panel-stack__docs"
+              [class.hybrid-panel-stack__docs--full]="!hybridChatOpen()"
+              [style.flex-basis.%]="hybridChatOpen() ? hybridDocsHeightPct() : null"
+            >
+              <app-report-view
+                #hybridReportRef
+                [sessionId]="sessionId()!"
+                [sectioned]="true"
+                [trackEngagement]="true"
+              />
+            </div>
+            @if (hybridChatOpen()) {
+              <div
+                class="hybrid-panel-stack__divider"
+                (mousedown)="onHybridVerticalResizeStart($event)"
+              ></div>
+              <div class="hybrid-panel-stack__chat">
+                <div class="hybrid-panel-stack__chat-header">
+                  <span>{{ t().hybridChatTitle }}</span>
+                  <button
+                    type="button"
+                    (click)="hybridChatOpen.set(false)"
+                    [title]="t().hybridCloseChat"
+                  >✕</button>
+                </div>
+                <app-chat
+                  [sessionId]="sessionId()!"
+                  (sectionLinkClicked)="onHybridSectionLinkClick($event)"
+                />
+              </div>
+            }
+          </div>
+          @if (!hybridChatOpen()) {
+            <button
+              class="hybrid-chat-fab"
+              type="button"
+              (click)="hybridChatOpen.set(true)"
+              [title]="t().hybridOpenChat"
+            >💬</button>
+          }
+        } @else if (reviewMode() === ReviewMode.Report) {
+          <app-report-view [sessionId]="sessionId()!" [sectioned]="true" />
         } @else {
-          <app-chat #chatRef [sessionId]="sessionId()!" />
+          <app-chat #chatRef [sessionId]="sessionId()!" [maxMessages]="isIntroSession() ? 1 : null" />
         }
       </main>
 

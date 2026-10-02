@@ -29,6 +29,8 @@ export interface Translations {
 
   chatEmpty: string;
   chatPlaceholder: string;
+  /** Intro tour's one-message chat gate — shown as the textarea placeholder once the cap is reached. */
+  chatLimitReached: string;
   send: string;
   disclaimer: string;
   aiError: string;
@@ -40,6 +42,9 @@ export interface Translations {
   collapseDiff: string;
   expandChat: string;
   collapseChat: string;
+  hybridOpenChat: string;
+  hybridCloseChat: string;
+  hybridChatTitle: string;
 
   loadRepoContext: string;
   repoContextLoading: string;
@@ -78,10 +83,21 @@ export interface Translations {
   studyParticipantPlaceholder: string;
   studyParticipantRequired: string;
   studyParticipantNotFound: string;
+  /** Shown when a non-test participant tries the bare-id form — they must use their personal link. */
+  studyPersonalLinkRequired: string;
+  /** Shown when a `?link=` token from the URL is unknown or expired — no fallback to the id form. */
+  studyLinkInvalid: string;
   studyAllDone: string;
-  studyLangLabel: string;
   studyLogin: string;
   studySessionLabel: string;
+  studyConsentRequiredTitle: string;
+  studyConsentRequiredText: string;
+  studyGoToConsent: string;
+  studyBaselineRequiredTitle: string;
+  studyBaselineRequiredText: string;
+  /** Fixed comment recorded on a timer-driven auto-submit (Decision=TimedOut) — see
+   *  AppComponent.onTimerExpired. Not shown as a UI label, just the stored comment text. */
+  studyTimerExpiredComment: string;
   tour: {
     next: string;
     back: string;
@@ -146,6 +162,7 @@ export const translations: Record<Lang, Translations> = {
 
     chatEmpty: 'Postavite pitanje o ovom Pull Requestu koristeći unos ispod ili odaberite jedno od brzih pitanja.',
     chatPlaceholder: 'Postavite pitanje o ovom PR-u…',
+    chatLimitReached: 'U ovom uvodnom koraku možete poslati samo jedno pitanje.',
     send: 'Pošalji',
     disclaimer: '⚠️ Ovaj alat pruža obrazovnu analizu. Konačnu odluku o PR-u donosi programer.',
     aiError: '_Greška pri komunikaciji s AI asistentom._',
@@ -162,6 +179,9 @@ export const translations: Record<Lang, Translations> = {
     collapseDiff: 'Smanji diff pregled',
     expandChat: 'Proširi chat',
     collapseChat: 'Smanji chat',
+    hybridOpenChat: 'Otvori chat',
+    hybridCloseChat: 'Zatvori chat',
+    hybridChatTitle: 'AI chat',
 
     loadRepoContext: 'Učitaj kontekst repozitorijuma',
     repoContextLoading: 'Učitavanje konteksta…',
@@ -200,10 +220,17 @@ export const translations: Record<Lang, Translations> = {
     studyParticipantPlaceholder: 'npr. 001',
     studyParticipantRequired: 'Unesite Participant ID',
     studyParticipantNotFound: 'Ispitanik sa ovim ID-em nije pronađen.',
+    studyPersonalLinkRequired: 'Ovom ispitaniku se može pristupiti samo preko ličnog linka koji ste dobili.',
+    studyLinkInvalid: 'Ovaj link nije validan ili je istekao. Obratite se istraživaču za novi link.',
     studyAllDone: 'Sve sesije za ovog ispitanika su završene. Hvala na učešću!',
-    studyLangLabel: 'Jezik / Language',
     studyLogin: 'Prijavi se',
     studySessionLabel: 'Sesija',
+    studyConsentRequiredTitle: 'Potreban je pristanak za učešće',
+    studyConsentRequiredText: 'Pre nego što nastavite, potrebno je da date pristanak za učešće u istraživanju i (ako još niste) popunite REI-40 i Big Five upitnike koje ste dobili mejlom.',
+    studyGoToConsent: 'Idi na formu za pristanak',
+    studyBaselineRequiredTitle: 'Čeka se baseline merenje',
+    studyBaselineRequiredText: 'Pre prve eksperimentalne sesije istraživač treba da zabeleži vaše baseline merenje. Javite se istraživaču i pokušajte ponovo kada vam on to potvrdi.',
+    studyTimerExpiredComment: 'Vreme za pregled je isteklo - automatski poslato.',
     tour: {
       next: 'Dalje →',
       back: '← Nazad',
@@ -218,23 +245,23 @@ export const translations: Record<Lang, Translations> = {
       diffTitle: 'Pregled izmena (diff)',
       diffBody: 'Zeleno su dodate linije koda, crveno obrisane. Ovde čitate šta je tačno promenjeno u fajlu koji ste izabrali.',
       quoteTitle: 'Citiranje koda u chat',
-      quoteBody: 'Ako selektujete deo koda mišem, pojaviće se dugme „Citiraj u chat" — tako možete pitati AI asistenta konkretno o toj liniji ili bloku koda.',
+      quoteBody: 'Ako selektujete deo koda mišem, pojaviće se dugme „Citiraj u chat" - tako možete pitati AI asistenta konkretno o toj liniji ili bloku koda.',
       chatTitle: 'Chat sa AI asistentom',
-      chatBody: 'Ovde postavljate pitanja AI asistentu o Pull Requestu — slobodnim tekstom ili klikom na ponuđena brza pitanja. Asistent odgovara na osnovu koda i opisa PR-a, ali nikad ne kaže da li treba odobriti ili odbaciti PR — tu odluku uvek donosite vi.',
+      chatBody: 'Ovde postavljate pitanja AI asistentu o Pull Requestu - slobodnim tekstom ili klikom na ponuđena brza pitanja. Asistent odgovara na osnovu koda i opisa PR-a, ali nikad ne kaže da li treba odobriti ili odbaciti PR - tu odluku uvek donosite vi.',
       reportTitle: 'Tehnički izveštaj',
       reportBody: 'Umesto chata, ovde dobijate detaljan pisani tehnički izveštaj o projektu i PR-u. Možete pretraživati dokument pomoću polja za pretragu na vrhu.',
       searchTitle: 'Pretraga dokumentacije',
-      searchBody: 'Ukucajte pojam ovde da pronađete sva mesta gde se pominje u izveštaju — strelice vas vode kroz rezultate, a „✕" briše pretragu.',
-      askQuestionTitle: 'Vaš red — postavite pitanje',
+      searchBody: 'Ukucajte pojam ovde da pronađete sva mesta gde se pominje u izveštaju - strelice vas vode kroz rezultate, a „✕" briše pretragu.',
+      askQuestionTitle: 'Vaš red - postavite pitanje',
       askQuestionBody: 'Sada probajte sami: ukucajte bilo koje pitanje o ovom PR-u u polje ispod i pošaljite ga. Sačekajte pravi odgovor od AI asistenta, pa kliknite „Dalje" da nastavite.',
       switchToReportTitle: 'Prelazimo na Wiki Mode',
-      switchToReportBody: 'Ova sesija je u AI Mode-u, ali u drugim sesijama možete dobiti Wiki Mode. Da biste ga videli uživo, sada ćemo privremeno prebaciti ovaj panel — umesto chata, dobijate gotov tehnički izveštaj koji možete pretraživati.',
+      switchToReportBody: 'Ova sesija je u AI Mode-u, ali u drugim sesijama možete dobiti Wiki Mode. Da biste ga videli uživo, sada ćemo privremeno prebaciti ovaj panel - umesto chata, dobijate gotov tehnički izveštaj koji možete pretraživati.',
       switchToAiTitle: 'Prelazimo na AI Mode',
-      switchToAiBody: 'Ova sesija je u Wiki Mode-u, ali u drugim sesijama možete dobiti AI Mode. Da biste ga videli uživo, sada ćemo privremeno prebaciti ovaj panel — umesto izveštaja, postavljate pitanja asistentu u realnom vremenu.',
+      switchToAiBody: 'Ova sesija je u Wiki Mode-u, ali u drugim sesijama možete dobiti AI Mode. Da biste ga videli uživo, sada ćemo privremeno prebaciti ovaj panel - umesto izveštaja, postavljate pitanja asistentu u realnom vremenu.',
       decisionBtnTitle: 'Donošenje odluke',
       decisionBtnBody: 'Kada ste spremni, ovim dugmetom otvarate formu za finalnu odluku o Pull Requestu.',
-      finishModalTitle: 'Forma za odluku — vaš red',
-      finishModalBody: 'Ovo je poslednji korak. Za ovu vežbu upišite kratak komentar (npr. „Intro") i kliknite „Prihvati" ili „Odbaci" — nije bitno koje, ovo je samo vežba. To će vas automatski prebaciti na NASA-TLX upitnik, gde vas čeka sličan kratak vodič.',
+      finishModalTitle: 'Forma za odluku - vaš red',
+      finishModalBody: 'Ovo je poslednji korak. Za ovu vežbu upišite kratak komentar (npr. „Intro") i kliknite „Prihvati" ili „Odbaci" - nije bitno koje, ovo je samo vežba. To će vas automatski prebaciti na NASA-TLX upitnik, gde vas čeka sličan kratak vodič.',
     },
   },
   en: {
@@ -266,6 +293,7 @@ export const translations: Record<Lang, Translations> = {
 
     chatEmpty: 'Ask a question about this Pull Request using the input below or select one of the quick questions.',
     chatPlaceholder: 'Ask a question about this PR…',
+    chatLimitReached: 'You can only send one question during this Intro step.',
     send: 'Send',
     disclaimer: '⚠️ This tool provides educational analysis. The final decision on the PR is made by the developer.',
     aiError: '_Error communicating with the AI assistant._',
@@ -282,6 +310,9 @@ export const translations: Record<Lang, Translations> = {
     collapseDiff: 'Collapse diff viewer',
     expandChat: 'Expand chat',
     collapseChat: 'Collapse chat',
+    hybridOpenChat: 'Open chat',
+    hybridCloseChat: 'Close chat',
+    hybridChatTitle: 'AI chat',
 
     loadRepoContext: 'Load repository context',
     repoContextLoading: 'Loading context…',
@@ -320,10 +351,17 @@ export const translations: Record<Lang, Translations> = {
     studyParticipantPlaceholder: 'e.g. 001',
     studyParticipantRequired: 'Enter your Participant ID',
     studyParticipantNotFound: 'No participant found with this ID.',
+    studyPersonalLinkRequired: 'This participant can only be accessed via the personal link you were sent.',
+    studyLinkInvalid: 'This link is invalid or has expired. Contact the researcher for a new one.',
     studyAllDone: 'All sessions for this participant are finished. Thank you for participating!',
-    studyLangLabel: 'Jezik / Language',
     studyLogin: 'Log in',
     studySessionLabel: 'Session',
+    studyConsentRequiredTitle: 'Consent to participate is required',
+    studyConsentRequiredText: "Before continuing, you need to give consent to participate in the research and (if you haven't yet) complete the REI-40 and Big Five questionnaires you received by email.",
+    studyGoToConsent: 'Go to the consent form',
+    studyBaselineRequiredTitle: 'Waiting on your baseline measurement',
+    studyBaselineRequiredText: "Your researcher needs to record your baseline measurement before your first experimental session. Please check with your researcher and try again once they confirm it.",
+    studyTimerExpiredComment: 'The review time has expired - submitted automatically.',
     tour: {
       next: 'Next →',
       back: '← Back',
@@ -338,23 +376,23 @@ export const translations: Record<Lang, Translations> = {
       diffTitle: 'Viewing changes (diff)',
       diffBody: 'Green lines were added, red lines were removed. This is where you read exactly what changed in the file you selected.',
       quoteTitle: 'Quoting code into the chat',
-      quoteBody: 'If you select part of the code with your mouse, a "Quote to chat" button appears — letting you ask the AI assistant specifically about that line or block of code.',
+      quoteBody: 'If you select part of the code with your mouse, a "Quote to chat" button appears - letting you ask the AI assistant specifically about that line or block of code.',
       chatTitle: 'Chat with the AI assistant',
-      chatBody: 'Here you ask the AI assistant questions about the Pull Request — in free text, or by clicking one of the suggested quick questions. The assistant answers based on the code and PR description, but never says whether the PR should be approved or rejected — that decision is always yours.',
+      chatBody: 'Here you ask the AI assistant questions about the Pull Request - in free text, or by clicking one of the suggested quick questions. The assistant answers based on the code and PR description, but never says whether the PR should be approved or rejected - that decision is always yours.',
       reportTitle: 'Technical report',
       reportBody: 'Instead of a chat, here you get a detailed written technical report about the project and the PR. You can search the document using the search field at the top.',
       searchTitle: 'Searching the documentation',
-      searchBody: 'Type a term here to find every place it\'s mentioned in the report — the arrows step through the results, and "✕" clears the search.',
-      askQuestionTitle: 'Your turn — ask a question',
+      searchBody: 'Type a term here to find every place it\'s mentioned in the report - the arrows step through the results, and "✕" clears the search.',
+      askQuestionTitle: 'Your turn - ask a question',
       askQuestionBody: 'Now try it yourself: type any question about this PR into the field below and send it. Wait for a real answer from the AI assistant, then click "Next" to continue.',
       switchToReportTitle: 'Switching to Wiki Mode',
-      switchToReportBody: 'This session is in AI Mode, but in other sessions you may get Wiki Mode. To show it to you live, we\'ll now temporarily switch this panel — instead of a chat, you get a ready-made technical report you can search.',
+      switchToReportBody: 'This session is in AI Mode, but in other sessions you may get Wiki Mode. To show it to you live, we\'ll now temporarily switch this panel - instead of a chat, you get a ready-made technical report you can search.',
       switchToAiTitle: 'Switching to AI Mode',
-      switchToAiBody: 'This session is in Wiki Mode, but in other sessions you may get AI Mode. To show it to you live, we\'ll now temporarily switch this panel — instead of a report, you ask the assistant questions in real time.',
+      switchToAiBody: 'This session is in Wiki Mode, but in other sessions you may get AI Mode. To show it to you live, we\'ll now temporarily switch this panel - instead of a report, you ask the assistant questions in real time.',
       decisionBtnTitle: 'Making a decision',
       decisionBtnBody: 'When you\'re ready, this button opens the form for your final decision on the Pull Request.',
-      finishModalTitle: 'Decision form — your turn',
-      finishModalBody: 'This is the last step. For this exercise, write a short comment (e.g. "Intro") and click "Accept" or "Reject" — either is fine, this is just practice. That will automatically take you to the NASA-TLX questionnaire, where a similar short guide is waiting for you.',
+      finishModalTitle: 'Decision form - your turn',
+      finishModalBody: 'This is the last step. For this exercise, write a short comment (e.g. "Intro") and click "Accept" or "Reject" - either is fine, this is just practice. That will automatically take you to the NASA-TLX questionnaire, where a similar short guide is waiting for you.',
     },
   }
 };
