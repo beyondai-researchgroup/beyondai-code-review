@@ -3107,6 +3107,19 @@ Verified live end to end through the production URLs with a temporary participan
 submit → REI-40/Big Five/Demographic tokens minted with production domains (not localhost) → each
 resolves on its own app → Code Review link-login works → NASA-TLX post-session response saved.
 
+### Links table shows completed questionnaires; survey apps wait for a sleeping API (2026-10-02)
+
+Reported from production: survey links listed as "valid" in Participant Detail would not open.
+Two causes. (1) The questionnaire had already been filled out — the survey app correctly answers
+`409 ALREADY_COMPLETED`, but the Links table only knew valid/expired. The admin overview now also
+returns `linkCompletions` (CONSENT_ENTRY ← `ConsentGivenAt`, REI40/BIGFIVE/DEMOGRAPHIC ← their
+result tables) and the table shows "Popunjeno <datum>" with no copy/regenerate actions; the
+per-type Generate route refuses REI40/BIGFIVE/DEMOGRAPHIC for an already-completed questionnaire
+(409). (2) The participant apps (consent, survey-a/b, demographics, task) gave every API call a
+10 s client timeout, but a Render free service needs 30–50 s to wake up after ~15 min idle — the
+first click on an emailed link showed an error. Raised to 90 s. Also corrected leftover "24 hours"
+wording (emails + expired-link messages) to the real 7-day lifetime. Deployed and verified live.
+
 ### Next planned improvements
 - Add a `UserSecretsId` reminder to the README / onboarding docs
 - Persist session ID in `sessionStorage` so a browser refresh reconnects to the same session
