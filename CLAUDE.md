@@ -3147,8 +3147,19 @@ REI-40/Big Five is now awaited before the 201 (a function can be frozen after re
 were copied from Render to each Vercel project (DATABASE_URL; plus MAIL_RELAY_*, GMAIL_USER,
 CODE_REVIEW_APP_URL for survey-a/b). Deploy: `npx vercel deploy --prod` from the repo root, one repo
 at a time (parallel npx runs corrupted the npx cache). Vercel limits a request/response body to
-4.5 MB, so Task-app uploads above that now fail with 413. Still on (suspended) Render: admin,
-consent, Code Review AI backend.
+4.5 MB, so Task-app uploads above that now fail with 413.
+
+Same day, **admin and consent APIs moved the same way** (admin: `api/index.mjs` imports
+`server/index.mjs`). Admin-specific changes: the hourly in-process session reminder became a daily
+**Vercel Cron** (`vercel.json` `crons`, 06:00 UTC) calling `GET /api/cron/session-reminders`, which
+requires `Authorization: Bearer $CRON_SECRET` (Vercel sends it; local dev still uses the timer);
+post-response work (notification fan-out, Google Calendar sync) goes through
+`server/background.mjs`'s `runInBackground`, which registers it with `waitUntil` from
+`@vercel/functions`; `googleapis` (208 MB — over Vercel's 250 MB function limit) was replaced by
+`@googleapis/calendar`, `@googleapis/forms`, `@googleapis/oauth2` + `google-auth-library`
+(`OAuth2Client`). Verified on production: login, researches/participants/overview/study-config/
+calendar-status/results endpoints, cron 401 without the secret, consent participant/link routes.
+Only the **Code Review AI backend** is left on (suspended) Render — planned move: Google Cloud Run.
 
 ### Next planned improvements
 - Add a `UserSecretsId` reminder to the README / onboarding docs
