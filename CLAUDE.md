@@ -3131,6 +3131,25 @@ test participant; fixed ones (001–004) are unchanged. 005 (research 90) has In
 AI (PR 2) → Report (PR 3), set directly in both Neon and local Postgres; no email on file by choice.
 Verified live on production: Intro → AI → Report → Intro, Report loads PR 3.
 
+### Render suspended for billing → 4 APIs moved to Vercel functions (2026-10-09)
+
+On 2026-10-08 Render suspended **all 7** services in the beyondai workspace with suspender `billing`
+(free plan; most likely the shared 750 free instance-hours/month were used up). The admin login then
+said "Pogrešan email ili lozinka" because the login page shows that text for every error, including
+a 503 from a suspended API.
+
+REI-40 (survey-a), Big Five (survey-b), Demographics and Task app no longer use Render: each repo
+has `api/index.mjs` that imports and default-exports the Express app from `server.mjs`, and
+`vercel.json` rewrites `/api/:path*` to `/api/index` (Express still sees the original path).
+`server.mjs` exports `app` and only calls `app.listen` when `process.env.VERCEL` is unset, so local dev
+is unchanged. `.vercelignore` no longer excludes `server`/`server.mjs`. The automatic Intro email in
+REI-40/Big Five is now awaited before the 201 (a function can be frozen after responding). Env vars
+were copied from Render to each Vercel project (DATABASE_URL; plus MAIL_RELAY_*, GMAIL_USER,
+CODE_REVIEW_APP_URL for survey-a/b). Deploy: `npx vercel deploy --prod` from the repo root, one repo
+at a time (parallel npx runs corrupted the npx cache). Vercel limits a request/response body to
+4.5 MB, so Task-app uploads above that now fail with 413. Still on (suspended) Render: admin,
+consent, Code Review AI backend.
+
 ### Next planned improvements
 - Add a `UserSecretsId` reminder to the README / onboarding docs
 - Persist session ID in `sessionStorage` so a browser refresh reconnects to the same session
