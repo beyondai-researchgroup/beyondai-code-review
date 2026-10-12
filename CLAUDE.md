@@ -3161,6 +3161,36 @@ post-response work (notification fan-out, Google Calendar sync) goes through
 calendar-status/results endpoints, cron 401 without the secret, consent participant/link routes.
 Only the **Code Review AI backend** is left on (suspended) Render — planned move: Google Cloud Run.
 
+### Code Review AI backend moved to Azure Container Apps (2026-10-12)
+
+Google Cloud Run was dropped (the billing account would not accept the card and asked for a business
+TIN). The backend now runs on **Azure for Students** (subscription of katin@uns.ac.rs, tenant
+"Univerzitet u Novom Sadu"); the student policy only allows italynorth, norwayeast,
+germanywestcentral, francecentral and spaincentral.
+
+- Resource group `beyondai-rg`, Container Apps environment `beyondai-env` (germanywestcentral, no
+  Log Analytics), app `beyondai-backend`:
+  `https://beyondai-backend.ambitiousbay-d54446bb.germanywestcentral.azurecontainerapps.io`.
+- Exactly one replica (min = max = 1) so in-memory review sessions survive; 0.5 vCPU / 1 GiB;
+  external ingress on port 8080 (`PORT=8080`); liveness probe on `/health`. Ingress cuts a single
+  request at 240 s.
+- Image: `ghcr.io/beyondai-researchgroup/beyondai-backend:<commit>` — the GHCR package is public, so
+  Azure needs no registry credentials. Built locally from the repo-root `Dockerfile` (Docker Desktop).
+- Env vars are the same as on Render; `Study__DatabaseUrl`, `Anthropic__ApiKey` and
+  `GitHub__PersonalAccessToken` are Container App secrets (secretRef).
+- `frontend/src/environments/environment.prod.ts` `apiUrl` points at the Azure URL.
+- Gotcha: `az containerapp env create` crashed (`IndexError: Replacement index 1 out of range`)
+  because the `Microsoft.App` provider stayed in "Registering" for over an hour. Creating the
+  environment and the app with a direct ARM `PUT` (`az rest`, api-version 2024-03-01) worked anyway.
+- Run `az` from PowerShell; in Git Bash the `az.cmd` path with spaces breaks.
+
+Redeploy: `docker build -t ghcr.io/beyondai-researchgroup/beyondai-backend:<sha> .` → `docker push`
+(logged in to ghcr.io as beyondai-researchgroup) →
+`az containerapp update -n beyondai-backend -g beyondai-rg --image <image>` (or the same ARM PUT).
+
+Verified on production: `/health` 200; participant 005 login → start-review → repo context → chat
+stream → decision → NASA-TLX handoff in a real browser, no console errors.
+
 ### Next planned improvements
 - Add a `UserSecretsId` reminder to the README / onboarding docs
 - Persist session ID in `sessionStorage` so a browser refresh reconnects to the same session
