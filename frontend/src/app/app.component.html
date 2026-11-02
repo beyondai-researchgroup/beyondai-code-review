@@ -123,15 +123,23 @@
             }
           </div>
           @if (!hybridChatOpen()) {
+            @if (hybridChatHintVisible()) {
+              <div class="hybrid-chat-hint" role="status">
+                <p>{{ t().hybridChatHint }}</p>
+                <button type="button" (click)="hybridChatHintVisible.set(false)">{{ t().hybridChatHintDismiss }}</button>
+              </div>
+            }
             <button
               class="hybrid-chat-fab"
               type="button"
-              (click)="hybridChatOpen.set(true)"
-              [title]="t().hybridOpenChat"
-            >💬</button>
+              (click)="hybridChatOpen.set(true); hybridChatHintVisible.set(false)"
+            >
+              <span class="hybrid-chat-fab__icon" aria-hidden="true">💬</span>
+              <span>{{ t().hybridAskAi }}</span>
+            </button>
           }
         } @else if (reviewMode() === ReviewMode.Report) {
-          <app-report-view [sessionId]="sessionId()!" [sectioned]="true" />
+          <app-report-view #reportRef [sessionId]="sessionId()!" [sectioned]="true" />
         } @else {
           <app-chat #chatRef [sessionId]="sessionId()!" [maxMessages]="isIntroSession() ? 1 : null" />
         }
@@ -148,6 +156,14 @@
     [closable]="!isIntroSession()"
     (closed)="onModalClosed()"
     (decisionSubmitted)="onDecisionSubmitted($event)"
+  />
+}
+
+@if (showNextSteps()) {
+  <app-next-steps-modal
+    [timedOut]="nextStepsTimedOut()"
+    [ready]="nextStepsReady()"
+    (continued)="onNextStepsContinue()"
   />
 }
 

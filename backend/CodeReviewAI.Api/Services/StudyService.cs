@@ -50,11 +50,13 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
         bool isTestParticipant;
         int? testFixedSessionId;
         bool baselineDone;
+        bool isProtocolResearch;
         await using (var infoCmd = new NpgsqlCommand(
             """
             SELECT p."Language", p."ConsentGivenAt", COALESCE(r."UsesConsentForm", TRUE), COALESCE(r."TaskType", 'PR_REVIEW'),
                    CASE WHEN r."TimerCodeReviewEnabled" THEN r."TimerCodeReviewMinutes" ELSE NULL END,
-                   p."IsTestParticipant", p."TestFixedSessionId", p."BaselineDoneAt"
+                   p."IsTestParticipant", p."TestFixedSessionId", p."BaselineDoneAt",
+                   COALESCE(r."FlowMode", 'CLASSIC') = 'PROTOCOL'
             FROM "Participant" p
             LEFT JOIN "Research" r ON r."Id" = p."ResearchId"
             WHERE p."ParticipantId" = @pid
@@ -73,6 +75,7 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
             isTestParticipant = infoReader.GetBoolean(5);
             testFixedSessionId = await infoReader.IsDBNullAsync(6, ct) ? null : infoReader.GetInt32(6);
             baselineDone = !await infoReader.IsDBNullAsync(7, ct);
+            isProtocolResearch = infoReader.GetBoolean(8);
 
             // Item 1 of the "platform improvements round 2" plan — ParticipantId is scoped per
             // research now, not globally unique, and this login form still takes only a bare id
@@ -157,7 +160,9 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
         // order computation as this query's own ORDER BY (COALESCE(SequenceOrder, SessionId)) and
         // the one admin-dashboard-andrejkatin's overview endpoint already uses.
         var effectiveSequence = sequenceOrder ?? nextSessionId;
-        if (effectiveSequence == 2 && !baselineDone)
+        // The baseline (EEG) gate belongs to the original study. A protocol research has no baseline step: its
+        // Code Review step creates the sessions itself and the protocol decides when the participant is sent here.
+        if (effectiveSequence == 2 && !baselineDone && !isProtocolResearch)
             return new StudyLoginState(true, null, null, false, false, language, BaselineRequired: true);
 
         return new StudyLoginState(true, nextSessionId, nextSessionName, false, false, language, TimerMinutes: timerMinutes);

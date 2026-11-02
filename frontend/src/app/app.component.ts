@@ -8,6 +8,7 @@ import { DiffViewerComponent, QuotedCode } from './features/diff-viewer/diff-vie
 import { PrDescriptionComponent } from './features/pr-description/pr-description.component';
 import { ReportViewComponent } from './features/report-view/report-view.component';
 import { FinishReviewModalComponent } from './features/finish-review-modal/finish-review-modal.component';
+import { NextStepsModalComponent } from './features/next-steps-modal/next-steps-modal.component';
 import { TourOverlayComponent } from './shared/tour-overlay/tour-overlay.component';
 import { TimerDisplayComponent } from './shared/timer-display/timer-display.component';
 import { SessionService } from './core/services/session.service';
@@ -23,7 +24,7 @@ import { environment } from '../environments/environment';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [GlobalHeaderComponent, StudyLoginComponent, ChatComponent, FileListComponent, DiffViewerComponent, PrDescriptionComponent, ReportViewComponent, FinishReviewModalComponent, TourOverlayComponent, TimerDisplayComponent],
+  imports: [GlobalHeaderComponent, StudyLoginComponent, ChatComponent, FileListComponent, DiffViewerComponent, PrDescriptionComponent, ReportViewComponent, FinishReviewModalComponent, NextStepsModalComponent, TourOverlayComponent, TimerDisplayComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })
@@ -68,6 +69,7 @@ export class AppComponent {
 
   @ViewChild('chatRef') private chatRef?: ChatComponent;
   @ViewChild('hybridReportRef') private hybridReportRef?: ReportViewComponent;
+  @ViewChild('reportRef') private reportRef?: ReportViewComponent;
 
   readonly fileListCollapsed = signal(false);
   readonly diffCollapsed = signal(false);
@@ -77,6 +79,16 @@ export class AppComponent {
    *  documentation view. A wholly separate overlay, not integrated with the 3-panel resize/
    *  collapse mechanism above. */
   readonly hybridChatOpen = signal(false);
+  /** Hybrid mode only — one-time hint that the AI assistant exists next to the documentation.
+   *  Pilot feedback: with the chat closed by default, a tester never noticed it was there. */
+  readonly hybridChatHintVisible = signal(true);
+
+  /** "Thanks + what's next" screen shown between the decision and the NASA-TLX hand-off. */
+  readonly showNextSteps = signal(false);
+  readonly nextStepsTimedOut = signal(false);
+  /** False while the session DELETE is in flight; Continue waits for it (see finishAndHandoff). */
+  readonly nextStepsReady = signal(false);
+  private pendingHandoff: (() => void) | null = null;
 
   // ── Panel widths (%) for drag-to-resize ──────────────────────────────────
   readonly leftWidth = signal(20);
@@ -183,10 +195,11 @@ export class AppComponent {
   // Applies to every mode/participant, not just Hybrid — see session.service.ts's
   // recordActivity() and the backend's IActivityLogService (local-dev-only, best-effort).
 
-  /** No-ops without an active review session. */
+  /** No-ops without an active review session, and once the next-steps screen is up (the session
+   *  is being deleted at that point, so nothing more can be appended to its log). */
   private logActivity(eventType: string, detail?: string | null, startedAt?: Date, endedAt?: Date): void {
     const id = this.sessionId();
-    if (!id) return;
+    if (!id || this.showNextSteps()) return;
     this.sessionService.recordActivity(id, { eventType, detail, startedAt, endedAt });
   }
 
@@ -461,7 +474,7 @@ export class AppComponent {
     this.sessionService
       .submitDecision(id, { decision: ReviewDecisionType.TimedOut, comment: this.t().studyTimerExpiredComment })
       .subscribe({
-        next: result => this.finishAndHandoff(result.handoffToken ?? null),
+        next: result => this.finishAndHandoff(result.handoffToken ?? null, true),
         error: err => {
           console.error('[Timer] auto-submit on expiry failed:', err);
           // Still hands off — an unrecorded decision shouldn't strand the participant on a
@@ -470,7 +483,7 @@ export class AppComponent {
           // handoff token was minted (the submit itself failed) — finishAndHandoff falls back
           // to the legacy shape for a test participant, or back to the participant's own
           // personal link for a real one (see its own doc comment).
-          this.finishAndHandoff(null);
+          this.finishAndHandoff(null, true);
         }
       });
   }
@@ -487,7 +500,7 @@ export class AppComponent {
    * NASA-TLX redirect; the study session isn't marked finished by this app either way, so
    * re-entering is harmless and they can try again.
    */
-  private finishAndHandoff(handoffToken: string | null): void {
+  private finishAndHandoff(handoffToken: string | null, timedOut = false): void {
     this.showFinishModal.set(false);
     this.reviewFinished.set(true);
     // The Intro tour's last step only ends here, on a real submit — see buildIntroTourSteps.
@@ -513,11 +526,36 @@ export class AppComponent {
     };
     // Navigate only after the DELETE settles — a synchronous redirect would abort the in-flight
     // request and leave the session (holding the PAT) alive on the server until the cleanup timeout.
+    // Study participants first see a short "thanks + next steps" screen; the redirect waits for
+    // their click. The session DELETE starts right away so it is done by the time they continue.
+    if (study) {
+      this.pendingHandoff = redirect;
+      this.nextStepsTimedOut.set(timedOut);
+      this.nextStepsReady.set(false);
+      this.showNextSteps.set(true);
+    }
+    const settled = () => {
+      if (study) this.nextStepsReady.set(true);
+      else redirect();
+    };
     const id = this.sessionId();
     if (!id) {
-      redirect();
+      settled();
       return;
     }
-    this.sessionService.deleteSession(id).subscribe({ complete: redirect, error: redirect });
+    // Sections still open are recorded now, and every pending event is given a moment to reach
+    // the backend, because deleting the session is what saves them.
+    this.hybridReportRef?.flushEngagement();
+    this.reportRef?.flushEngagement();
+    this.sessionService.whenEventsSent().then(() =>
+      this.sessionService.deleteSession(id).subscribe({ complete: settled, error: settled })
+    );
+  }
+
+  onNextStepsContinue(): void {
+    if (!this.nextStepsReady() || !this.pendingHandoff) return;
+    const go = this.pendingHandoff;
+    this.pendingHandoff = null;
+    go();
   }
 }

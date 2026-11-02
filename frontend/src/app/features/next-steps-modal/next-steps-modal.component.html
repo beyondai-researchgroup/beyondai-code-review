@@ -1,0 +1,30 @@
+<div class="modal-backdrop">
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="next-steps-title">
+    <div class="modal-header">
+      <span class="done-mark" aria-hidden="true">✓</span>
+      <h2 class="modal-title" id="next-steps-title">{{ t().nextStepsTitle }}</h2>
+    </div>
+
+    <div class="modal-body">
+      <p class="lead">{{ timedOut() ? t().nextStepsLeadTimedOut : t().nextStepsLead }}</p>
+
+      <p class="steps-heading">{{ t().nextStepsHeading }}</p>
+      <ol class="steps">
+        <li>
+          <span class="step-name">{{ t().nextStepsTlxName }}</span>
+          <span class="step-desc">{{ t().nextStepsTlxDesc }}</span>
+        </li>
+        <li>
+          <span class="step-name">{{ t().nextStepsSurveyName }}</span>
+          <span class="step-desc">{{ t().nextStepsSurveyDesc }}</span>
+        </li>
+      </ol>
+
+      <p class="duration">{{ t().nextStepsDuration }}</p>
+
+      <button type="button" class="continue-btn" [disabled]="!ready()" (click)="continued.emit()">
+        {{ t().nextStepsContinue }}
+      </button>
+    </div>
+  </div>
+</div>

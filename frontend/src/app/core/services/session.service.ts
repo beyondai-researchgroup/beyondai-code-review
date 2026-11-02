@@ -290,12 +290,12 @@ export class SessionService {
     sessionId: string,
     payload: { sectionId: string; sectionTitle: string; action: 'Expand' | 'Collapse'; durationSeconds?: number }
   ): void {
-    fetch(`${this.apiUrl}/${sessionId}/hybrid/section-event`, {
+    this.trackEvent(fetch(`${this.apiUrl}/${sessionId}/hybrid/section-event`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       keepalive: true
-    }).catch(() => { /* best-effort, never blocks the participant */ });
+    }).catch(() => { /* best-effort, never blocks the participant */ }));
   }
 
   /**
@@ -308,7 +308,7 @@ export class SessionService {
     sessionId: string,
     event: { eventType: string; detail?: string | null; startedAt?: Date; endedAt?: Date | null }
   ): void {
-    fetch(`${this.apiUrl}/${sessionId}/activity-log`, {
+    this.trackEvent(fetch(`${this.apiUrl}/${sessionId}/activity-log`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -318,7 +318,25 @@ export class SessionService {
         endedAt: event.endedAt ? event.endedAt.toISOString() : null
       }),
       keepalive: true
-    }).catch(() => { /* best-effort, never blocks the participant */ });
+    }).catch(() => { /* best-effort, never blocks the participant */ }));
+  }
+
+  /** Event requests (activity log, Hybrid section events) still on their way to the backend. */
+  private readonly pendingEvents = new Set<Promise<unknown>>();
+
+  private trackEvent(request: Promise<unknown>): void {
+    this.pendingEvents.add(request);
+    request.finally(() => this.pendingEvents.delete(request));
+  }
+
+  /**
+   * Resolves once every event request sent so far has settled, or after `timeoutMs`. Call it before
+   * deleting a session: the backend saves the activity log and section events at deletion, so an
+   * event that arrives afterwards is lost (404).
+   */
+  whenEventsSent(timeoutMs = 3000): Promise<void> {
+    const all = Promise.allSettled([...this.pendingEvents]).then(() => undefined);
+    return Promise.race([all, new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
   }
 
   // ── Study flow ────────────────────────────────────────────────────────────

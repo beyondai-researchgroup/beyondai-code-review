@@ -151,6 +151,12 @@ export class ReportViewComponent implements OnDestroy {
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  /** Records the dwell time of every section that is still open — called before the session is
+   *  deleted on decision submit, since an unload-time flush would arrive after the deletion. */
+  flushEngagement(): void {
+    this.flushOpenSections();
+  }
+
   private flushOpenSections(keepOpen = false): void {
     for (const id of [...this.sectionOpenedAt.keys()]) {
       const openedAt = this.sectionOpenedAt.get(id)!;

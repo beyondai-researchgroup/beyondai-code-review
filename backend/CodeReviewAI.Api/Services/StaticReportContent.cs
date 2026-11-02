@@ -206,6 +206,28 @@ internal static class StaticReportContent
           rotaciju ključeva korišćenih za heširanje; oba su identifikovana kao pravci daljeg
           unapređenja bezbednosti.
 
+        ### Kriptografski standardi heširanja
+
+        Izbor heš algoritma prati preporuke američkog Nacionalnog instituta za standarde i tehnologiju
+        (NIST). Standard FIPS 180-4 definiše SHA-1 i familiju SHA-2 (SHA-224, SHA-256, SHA-384,
+        SHA-512), a FIPS 202 familiju SHA-3.
+
+        | Algoritam | Standard | Status |
+        |---|---|---|
+        | MD5 | nije NIST standard | Nesiguran — praktični napadi kolizijom poznati su od 2004. godine; ne koristi se za bezbednosne namene |
+        | SHA-1 | FIPS 180-4 | Zastareo — praktična kolizija demonstrirana 2017. godine; NIST ga ne dozvoljava za nove digitalne potpise (SP 800-131A) i povlači ga potpuno do kraja 2030. godine |
+        | SHA-256 | FIPS 180-4 (SHA-2) | Preporučen — minimum za nove sisteme; ovaj sistem ga koristi za transakcije i Merkelovo stablo |
+        | SHA-384 / SHA-512 | FIPS 180-4 (SHA-2) | Preporučeni kada je potreban viši nivo bezbednosti |
+        | SHA3-256 / SHA3-512 | FIPS 202 (SHA-3) | Odobrena alternativa familiji SHA-2 |
+
+        Smernice za ovaj sistem:
+
+        - Za integritet podataka i Merkelovo stablo koristi se SHA-256 ili jači algoritam iz familije
+          SHA-2.
+        - MD5 i SHA-1 se ne uvode u nove funkcionalnosti; postojeće upotrebe treba zameniti.
+        - Promena algoritma menja sve heš vrednosti koje iz njega nastaju (uključujući Merkelov koren
+          već upisan na blokčejn), pa zahteva plan migracije ili verzionisanje postojećih podataka.
+
         ## Model podataka
 
         Perzistencija je podeljena na dve baze: `WalletDb` (novčanici i tokeni) i
@@ -733,6 +755,27 @@ internal static class StaticReportContent
           Azure Key Vault account (the single point linking identity and wallet) and does not
           implement rotation of the keys used for hashing; both are identified as directions for
           further security hardening.
+
+        ### Cryptographic Hashing Standards
+
+        The choice of hash algorithm follows the recommendations of the U.S. National Institute of
+        Standards and Technology (NIST). FIPS 180-4 defines SHA-1 and the SHA-2 family (SHA-224,
+        SHA-256, SHA-384, SHA-512), and FIPS 202 defines the SHA-3 family.
+
+        | Algorithm | Standard | Status |
+        |---|---|---|
+        | MD5 | not a NIST standard | Insecure — practical collision attacks have been known since 2004; not used for security purposes |
+        | SHA-1 | FIPS 180-4 | Deprecated — a practical collision was demonstrated in 2017; NIST disallows it for new digital signatures (SP 800-131A) and is retiring it completely by the end of 2030 |
+        | SHA-256 | FIPS 180-4 (SHA-2) | Recommended — the minimum for new systems; this system uses it for transactions and the Merkle tree |
+        | SHA-384 / SHA-512 | FIPS 180-4 (SHA-2) | Recommended when a higher security level is required |
+        | SHA3-256 / SHA3-512 | FIPS 202 (SHA-3) | Approved alternative to the SHA-2 family |
+
+        Guidelines for this system:
+
+        - Data integrity and the Merkle tree use SHA-256 or a stronger algorithm from the SHA-2 family.
+        - MD5 and SHA-1 are not introduced into new functionality; existing uses should be replaced.
+        - Changing the algorithm changes every hash value derived from it (including Merkle roots already
+          written to the blockchain), so it requires a migration plan or versioning of existing data.
 
         ## Data Model
 

@@ -45,6 +45,20 @@ export interface Translations {
   hybridOpenChat: string;
   hybridCloseChat: string;
   hybridChatTitle: string;
+  hybridAskAi: string;
+  hybridChatHint: string;
+  hybridChatHintDismiss: string;
+
+  nextStepsTitle: string;
+  nextStepsLead: string;
+  nextStepsLeadTimedOut: string;
+  nextStepsHeading: string;
+  nextStepsTlxName: string;
+  nextStepsTlxDesc: string;
+  nextStepsSurveyName: string;
+  nextStepsSurveyDesc: string;
+  nextStepsDuration: string;
+  nextStepsContinue: string;
 
   loadRepoContext: string;
   repoContextLoading: string;
@@ -182,6 +196,20 @@ export const translations: Record<Lang, Translations> = {
     hybridOpenChat: 'Otvori chat',
     hybridCloseChat: 'Zatvori chat',
     hybridChatTitle: 'AI chat',
+    hybridAskAi: 'Pitaj AI asistenta',
+    hybridChatHint: 'U ovoj sesiji pored dokumentacije možete da koristite i AI asistenta. Otvorite ga dugmetom „Pitaj AI asistenta“ u donjem desnom uglu.',
+    hybridChatHintDismiss: 'U redu',
+
+    nextStepsTitle: 'Hvala! Vaša odluka je sačuvana.',
+    nextStepsLead: 'Završili ste pregled Pull Request-a. Ostala su još dva kratka koraka pre kraja ove sesije.',
+    nextStepsLeadTimedOut: 'Vreme za pregled Pull Request-a je isteklo i odluka je automatski sačuvana. Ostala su još dva kratka koraka pre kraja ove sesije.',
+    nextStepsHeading: 'Sledeći koraci',
+    nextStepsTlxName: 'Procena opterećenja (NASA-TLX)',
+    nextStepsTlxDesc: 'Kratko ćete oceniti koliko vam je zadatak bio zahtevan i naporan.',
+    nextStepsSurveyName: 'Kratak upitnik o sesiji',
+    nextStepsSurveyDesc: 'Pet kratkih pitanja o tome kako ste se snašli u ovoj sesiji.',
+    nextStepsDuration: 'Oba koraka zajedno traju ne više od 5 minuta.',
+    nextStepsContinue: 'Nastavi na procenu opterećenja',
 
     loadRepoContext: 'Učitaj kontekst repozitorijuma',
     repoContextLoading: 'Učitavanje konteksta…',
@@ -313,6 +341,20 @@ export const translations: Record<Lang, Translations> = {
     hybridOpenChat: 'Open chat',
     hybridCloseChat: 'Close chat',
     hybridChatTitle: 'AI chat',
+    hybridAskAi: 'Ask the AI assistant',
+    hybridChatHint: 'In this session you can use the AI assistant alongside the documentation. Open it with the “Ask the AI assistant” button in the bottom-right corner.',
+    hybridChatHintDismiss: 'Got it',
+
+    nextStepsTitle: 'Thank you! Your decision has been saved.',
+    nextStepsLead: 'You have finished reviewing the pull request. Two short steps remain before this session ends.',
+    nextStepsLeadTimedOut: 'The time for reviewing the pull request has run out and your decision was saved automatically. Two short steps remain before this session ends.',
+    nextStepsHeading: 'Next steps',
+    nextStepsTlxName: 'Workload rating (NASA-TLX)',
+    nextStepsTlxDesc: 'You will briefly rate how demanding and effortful the task was.',
+    nextStepsSurveyName: 'Short session questionnaire',
+    nextStepsSurveyDesc: 'Five short questions about how this session went for you.',
+    nextStepsDuration: 'Both steps together take no more than 5 minutes.',
+    nextStepsContinue: 'Continue to the workload rating',
 
     loadRepoContext: 'Load repository context',
     repoContextLoading: 'Loading context…',

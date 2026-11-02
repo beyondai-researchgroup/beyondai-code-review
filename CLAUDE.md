@@ -3191,6 +3191,477 @@ Redeploy: `docker build -t ghcr.io/beyondai-researchgroup/beyondai-backend:<sha>
 Verified on production: `/health` 200; participant 005 login → start-review → repo context → chat
 stream → decision → NASA-TLX handoff in a real browser, no console errors.
 
+### Pilot-tester feedback round (2026-10-13, local only — not yet committed or deployed)
+
+- **Decision → NASA-TLX transition**: new `NextStepsModalComponent`
+  (`features/next-steps-modal/`). After a decision (or timer expiry) study participants see
+  "thanks, two short steps left (NASA-TLX + session questionnaire), under 5 minutes" and continue
+  with a button; the redirect no longer happens on its own. `finishAndHandoff` starts the session
+  DELETE right away; Continue waits for it.
+- **Events lost at session end, fixed**: section dwell time for sections still open and any
+  activity-log request still in flight used to arrive after the DELETE (404, lost). Now
+  `finishAndHandoff` calls `ReportViewComponent.flushEngagement()` (Hybrid and Report) and awaits
+  `SessionService.whenEventsSent()` (max 3 s) before deleting. `logActivity` is a no-op once the
+  next-steps screen is up.
+- **Hybrid chat discoverability**: a tester thought Hybrid had "only documentation". The 💬 icon is
+  now a labeled "Pitaj AI asistenta" button plus a one-time hint. The chat still starts closed, so
+  opening it remains the participant's choice.
+- **Documentation**: new `### Kriptografski standardi heširanja` / `### Cryptographic Hashing
+  Standards` subsection inside "Bezbednosna razmatranja" (NIST FIPS 180-4/202; MD5 and SHA-1
+  insecure, SHA-256 minimum). It is a `###` heading, so the `##` count stays 18 and Hybrid section
+  ids do not shift.
+- **REI-40 wording** (`rei40-andrejkatin` i18n + admin `rei40-items-meta.ts`): item 30 SR
+  "Sumnjam da…" (= "I doubt that…", reverses the meaning of the reverse-scored original "I suspect…")
+  → "Pretpostavljam da…"; item 27 SR reworded; six EN items restored to the exact Pacini & Epstein
+  (1999) wording. Answers collected before this change used the old wording.
+- **Demographic "Drugo" without a text field**: not a code bug. In production, research 90's
+  questions were re-saved with the "Other, please specify" switch off on all three "Drugo" options.
+  Run `Sql/032_demographic_other_specify_fix.sql` on Neon before the next deploy. The admin switch is
+  renamed to "Polje za upis" with a tooltip and a page hint.
+
+### Research protocol — the researcher defines their own steps (2026-10-27, local only — not committed or deployed)
+
+The research is now the top-level entity and a researcher can build their own protocol instead of being
+fitted into the BeyondAI PR-review "mold". REI-40, Big Five and NASA-TLX are just optional step types;
+Code Review AI is **not** a protocol step (explicit decision: "ne za sada"). Plan file:
+`C:\Users\Andrej\.claude\plans\create-a-claude-md-file-cozy-hinton.md`.
+
+**Isolation principle (the study in progress must never be affected)**: `Research.FlowMode`
+(`'CLASSIC'` default / `'PROTOCOL'`, `Sql/033_research_protocol.sql`, additive only). Every existing
+research, including the live pilot (research 90, test participants 001-005) and research 1, stays
+`CLASSIC` and takes byte-for-byte the old code path. All new code is gated on `PROTOCOL`: the protocol
+APIs answer `400 NOT_PROTOCOL` for a classic research, the nav/Configuration hide or show things by
+`flowMode`, and the module apps (REI-40, Big Five, NASA-TLX, demographics) only gained a best-effort
+hook call. The .NET backend and the NASA-TLX handoff were not touched. A `PROTOCOL` research can only be
+created from the superadmin's "Istraživanja" page (see "Admin menu by phase" below) or `POST /api/admin/researches` with
+`flowMode:'PROTOCOL'` (any other explicit value is a 400); it is created with the legacy module toggles
+off, `TaskType 'GENERIC'` and `ConsentPortalActive = true`.
+
+**Protocol model** (`ResearchProtocolStep`): ordered steps of type `CONSENT`, `DEMOGRAPHIC`,
+`QUESTIONNAIRE` (researcher-authored), `REI40`, `BIGFIVE`, `NASA_TLX`, `EXTERNAL_LINK`, `MESSAGE`,
+`MANUAL` (in-person, e.g. EEG). Delivery `AUTO` (right after the previous step), `AFTER_DELAY`
+(`DelayDays`) or `MANUAL` (the researcher sends it). Consent, demographic, REI-40, Big Five and NASA-TLX
+can appear at most once (their result tables are one-per-participant). **Participants never see the
+protocol** — they get only the email for their next step; the researcher sees progress. Editing is
+locked by progress: a step whose `ParticipantProtocolStep` row is non-PENDING can't be removed/retyped,
+and the order is frozen up to the last started step (`PROTOCOL_LOCKED` 409); appending is always allowed.
+Consent/demographic defaults are seeded on first save of such a step, and both stay editable per research.
+
+**Researcher-authored questionnaires** (`Questionnaire`/`QuestionnaireItem`, admin page "Upitnici"):
+item types LIKERT (2-10 points, end labels), SINGLE_CHOICE, MULTI_CHOICE (options carry a stable `key`,
+one can be "Polje za upis"), TEXT, NUMBER; optional subscale + reverse scoring. Answers
+(`QuestionnaireResponse.Answers`) are keyed by the item's stable **`ItemKey` uuid**, never by row id, so
+rewording never detaches answers (the same class of bug as the demographic one below). Once answered the
+structure is locked (`ITEM_HAS_ANSWERS`/`OPTION_HAS_ANSWERS`/`SCALE_LOCKED`); wording stays editable;
+"Dupliraj" makes a new version. The same questionnaire may be used by several steps (repeated measure).
+Sub-scale and reverse flags are never sent to participants.
+
+**Forms app** `forms-andrejkatin` (ports 4306 ng / 4316 API; **not a git repo yet, not deployed**): the
+one participant-facing app for steps the platform renders itself — QUESTIONNAIRE, CONSENT, EXTERNAL_LINK.
+Magic link only (`/link/:token`, token in the new `ProtocolStepLink` table so `SurveyAccessToken`'s CHECK
+stayed untouched), shows only that step, errors `NOT_FOUND` 404 / `EXPIRED` 410 / `NOT_ACTIVE` 403 /
+`ALREADY_COMPLETED` 409, applies the language resolved from the link (`translate.use`), title "BeyondAI"
+(anti-priming: no instrument names anywhere, emails included). REI-40/Big Five/NASA-TLX/demographic steps
+keep using their existing apps and tokens. Module apps only require `Research.ConsentPortalActive`.
+
+**Engine** (`admin-dashboard-andrejkatin/server/protocol/engine.mjs`, `advanceParticipant`) is
+idempotent: reconcile completion from the existing result tables (`Rei40Result`, `BigFiveResult`,
+`TlxResult` 'Samostalna sesija', `DemographicResponse`, `QuestionnaireResponse`,
+`Participant.ConsentGivenAt`), then send / schedule / wait for the first unfinished step. Triggers:
+(1) forms app and the module hooks (`notifyProtocolEngine` in rei40, bigfive, demographics, NASA-TLX
+`api/db/result.ts` + `server.ts`) call `POST /api/protocol-engine/advance` with header `X-Engine-Secret`
+(`PROTOCOL_ENGINE_SECRET`; the forms app takes `PROTOCOL_ENGINE_URL` as the **base** URL, it appends the
+path itself); (2) the daily Vercel cron `GET /api/cron/protocol-engine` (Bearer `CRON_SECRET`,
+`vercel.json` `0 7 * * *` — Hobby allows only 2 crons and the project now uses exactly 2); (3) researcher
+buttons. Emails use the generic template (`protocolStepEmail.mjs`), sender name
+`EmailSenderName -> StudyDisplayName -> Name`.
+
+**Admin UI**: nav for a PROTOCOL research = Protokol, Upitnici, Učesnici (`/protocol-participants`),
+Uvoz učesnika (participants-only template), consent/demographic pages only if the protocol has those
+steps, and Results entries only for step types present (new "Rezultati upitnika"). Participant progress
+matrix + per-participant timeline with actions: start protocol (one / all not started), send now /
+resend, copy live link, mark done (manual steps), skip. `server/protocol-progress/routes.mjs`
+(`/api/admin/protocol-progress/:researchId/...`). Questionnaire results: `server/questionnaire-results/
+routes.mjs` (`/api/admin/questionnaire-results/:researchId[/:questionnaireId[/export]]`, optional
+`?stepId=`): raw table, per-item stats (Likert distribution, raw vs reverse-scored mean, number M/SD/min/
+max, choice counts, text list), subscale scores (per-participant mean, group M and sample SD), CSV with
+one column per item (`<wording> [<ItemKey first 8>]`) + `Subscale: X` columns. All role-guarded
+(`hasMinRole` OWNER/COLLABORATOR write) and scope-checked like the other routes.
+
+**Also fixed in this round**: the demographic-questions PUT used to delete and re-insert every question
+(new ids), orphaning already-given answers keyed by id. It is now an upsert by id with 409 guards
+(`answeredConflict` in the UI); the page's toggle reads "Polje za upis".
+
+**Verified locally** in a throwaway Postgres (`p0-pg`, restored from the local DB; admin API, forms API
+and Playwright all inside Docker — the real local dev DB container is unreachable from the host because a
+foreign container, `tests-local-pg`, holds port 5433): Phase 0 11/11, Phase 1 backend 46/46 + UI 21/21,
+engine/forms suite 58/58 (re-run green at the end), participant progress UI 22/22, questionnaire results
+28/28 (subscale M/SD and reverse scoring checked by hand). Classic research 90 re-checked in the browser
+after each phase: nav, Configuration, Participants page unchanged; protocol APIs refuse it.
+`ng build --configuration production` is clean for admin-dashboard and forms.
+
+**NOT done / to do before this reaches production (only when asked)**: back up Neon, then apply
+`Sql/032_demographic_other_specify_fix.sql` and `Sql/033_research_protocol.sql` (both idempotent); create
+a GitHub repo + Vercel project for `forms-andrejkatin` (env `DATABASE_URL`, `MAIL_RELAY_URL`,
+`MAIL_RELAY_SECRET`, `PROTOCOL_ENGINE_URL`, `PROTOCOL_ENGINE_SECRET`; its `vercel.json`/`api/index.mjs`
+follow the other apps); give the admin project `FORMS_APP_URL` + `PROTOCOL_ENGINE_SECRET`; set
+`PROTOCOL_ENGINE_URL`/`PROTOCOL_ENGINE_SECRET` on survey-a, survey-b, demographics and NASA-TLX;
+redeploy one app at a time (admin last). The Azure Code Review backend is not redeployed. Optional
+later: a combined all-steps CSV per research, Code Review as a protocol step.
+
+### Admin menu by phase; Study Builder removed (2026-10-27, local only)
+
+The Study Builder wizard (`/study-builder`, "Kreator studije") is gone: it duplicated the Istraživanja page
+and the Protocol page. New flow: the superadmin adds a research on **Istraživanja** (name, university, city,
+country, description — no module switches); it is **always created as `FlowMode = 'PROTOCOL'`** (the page
+sends `flowMode:'PROTOCOL'`, then selects the new research and opens `/protocol`); the researcher defines
+the protocol there. Classic (PR-review) researches are only the pre-existing ones (1, 10, 90), unchanged.
+The researches list gained a **Tip** column (`GET /api/admin/researches` now returns `flowMode`). Protocol
+locking is unchanged (by progress: `PROTOCOL_LOCKED`), no backend change besides the list field.
+
+The left menu is grouped by phase (same routes and visibility rules as before, only grouped):
+Pregled · **Priprema** (protocol: Protokol, Upitnici, [Obrazac pristanka], [Demografski upitnik],
+Konfiguracija; classic: Konfiguracija zadatka, [Obrazac pristanka], [Demografski upitnik], Konfiguracija) ·
+**Sprovođenje** (Učesnici, Uvoz učesnika, [Eksperimentalne sesije], Kalendar) · **Rezultati** (as before) ·
+**Administracija** (superadmin only: Istraživanja, Istraživači). `ConsentFormComponent`'s wizard-only
+`hideHeader` input was removed with the wizard. Verified in Docker/Playwright against a throwaway DB copy
+(16 checks: menu order for research 90 / a new protocol research / a scoped researcher, new research lands on
+`/protocol` as PROTOCOL/GENERIC with legacy modules off, `/study-builder` renders nothing); production
+build clean.
+
+### Sheets app — Excel-like tables for a research (2026-10-27, local only — not committed or deployed)
+
+New standalone app **`sheets-andrejkatin`** (`C:\Users\Andrej\Documents\sheets-andrejkatin`, ports **4307 ng / 4317 API**,
+not a git repo yet, never deployed) that runs on its own like Code Review AI. A researcher designs ONE table
+template per research (several sheets, each its own table); each participant fills their own copy through a
+personal magic link; the admin dashboard shows status and exports to Excel. Stack: Angular 17 standalone +
+ngx-translate (sr/en) + Express 5, cloned from `task-app-andrejkatin`'s skeleton; the spreadsheet engine is
+**Univer** (`@univerjs/presets` + `preset-sheets-core` + `preset-sheets-data-validation`, Apache-2.0, v1.2).
+
+**Opt-in and isolated**: `Research.UsesSheets` (default FALSE, `Sql/034_research_sheets.sql`, additive, applied to the
+local DBs only). Nothing changes for any research until the toggle is switched on (admin → Konfiguracija → "Tabele",
+shown for CLASSIC and PROTOCOL researches). New tables: `SheetWorkbook` (one per research: `Snapshot` = Univer layout
+with merges/widths/header text, `Rules` = the single source of truth for options/required, `Version`), `SheetEntry`
+(one per participant: sparse `Rows`, `Status` DRAFT/SUBMITTED), `SheetAccessLink` (own token table, 7-day links,
+`SurveyAccessToken`'s CHECK untouched).
+
+**Rules model** (`server/rules.mjs`, mirrored in `src/app/grid/grid-model.ts`): per **column** `{title, required,
+options|null}` applying to every data row, plus per-**cell** exceptions `{options?, free?, required?}`. Header = the first
+N rows (1..10) of a sheet; merges are only allowed there; below it the participant adds rows (data area = `headerRows + 500`
+rows). Option values may not contain a comma (Univer's list validation is comma-joined). The server **re-validates every
+save** with the same rules: value must be one of the offered options, rows only in the data area, and on submit every
+started row must have all its required cells (`MISSING_REQUIRED`) plus at least one row (`EMPTY_ENTRY`).
+
+**Participant behaviour** (`SheetGridComponent`, mode `fill`): header and structure are locked (Univer structure commands are
+cancelled in `BeforeCommandExecute`), dropdown cells reject anything outside the list (Univer's own error dialog), required
+columns get " *" on their header (in memory only), and **rows are entered in order**: while a started row is missing a
+required cell the selection cannot leave that row (`sheet.operation.set-selections` and edit-start are cancelled; banner names
+the row and the missing columns), otherwise only the next empty row opens (`computeRowGate`). Drafts autosave (debounced
+700 ms → `PUT /api/link/:token/entry`); "Pošalji tabelu" asks for confirmation and locks the entry. Link errors:
+`NOT_FOUND` 404 / `EXPIRED` 410 / `NOT_ACTIVE` 403 / `ALREADY_COMPLETED` 409. The participant's language comes from
+`Participant.Language`; tab title "BeyondAI" (anti-priming).
+
+**Researcher behaviour** (`DesignerComponent`, route `/research/:id` after `/login` with the normal admin email + password —
+same `Researcher` table, same JWT shape, duplicated auth/scope/role code): own toolbar (Univer's toolbar is hidden: no
+fonts/colours/borders) with Merge/Unmerge (header only), +/− column, header-row counter, a rules panel per selected
+column/cell (required, options one per line, per-cell exception), "Pregled kao učesnik" (preview, nothing saved) and Save.
+Row/column insert/delete go through the toolbar so the rules shift with the columns. Once any participant has an entry the
+template is **locked** (`409 TEMPLATE_LOCKED`): only appending options is allowed (`PUT /api/research/:id/workbook/rules`,
+`lockedRulesViolation`). OWNER/COLLABORATOR/superadmin write, VIEWER read-only.
+
+**Admin dashboard** (`server/sheets/routes.mjs` at `/api/admin/sheets`, page `src/app/sheets/`, nav "Tabele" under
+Sprovođenje when `usesSheets`): overview of participants (link valid/expired/none, entry none/draft/submitted), mint + email a
+link for one participant or in bulk (generic `buildProtocolStepEmail`, sender `EmailSenderName → StudyDisplayName → Name`),
+"copy link", read-only view of a participant's table, and **Excel export** (one worksheet per template sheet, header with its
+merges, `ParticipantId` first column and `Status` last, one row per filled row). Env: `SHEETS_APP_URL` (default
+`http://localhost:4307`). `study-config` GET/PUT gained `usesSheets`.
+
+**Gotchas found while building**: Univer's CSS must be listed in `angular.json` `styles` (importing it from a lazy component
+leaves the UI unstyled); `tsconfig.json` needs `paths` for `@univerjs/*/locales/*` (classic module resolution ignores the
+package `exports`); selection/value changes are read from `CommandExecuted` (`sheet.operation.set-selections`,
+`sheet.mutation.set-range-values`) because the `SelectionChanged` event did not fire; the sheet's `rowCount` must grow with the
+header (`setRowCount(headerRows + 500)`) or data-validation ranges go out of bounds; a test hook (`window.__univerAPI`) exists
+only when `localStorage['sheetsapp-e2e'] === '1'`. Production builds print "not ESM" warnings for Univer's dependencies
+(harmless). Univer's UI language is en-US (no Serbian pack).
+
+**Verified locally** (Docker: throwaway DB copy, API + Playwright in containers): Univer spike (toolbar hidden, merges/widths in
+the snapshot, strict list validation, selection/edit blocking) 11/11; sheets API + rules 54 checks; researcher + participant
+browser flow 36 checks (merge header, comma refused, required + list + cell exception saved, preview asterisks, order gating,
+dropdown strictness, header not editable, autosave, template locks, reload restores draft, submit, already-submitted link);
+admin integration 38 checks (toggle, links, 7-day expiry, bulk, VIEWER/outsider 403, entry view, `.xlsx` opened back and
+verified incl. merges, page + nav + research 90 unaffected). `ng build --configuration production` clean for the sheets app and admin.
+
+**Not done / out of scope**: git repo + GitHub + Vercel/Render deployment for `sheets-andrejkatin`, Neon migration
+`034_research_sheets.sql` (backup first), several templates per research, prefilled/locked rows in the data area, formulas,
+real-time collaboration, a "table" step in the protocol, Serbian translation of Univer's own UI. Added to the
+`/start-study-apps` skill (together with the forms app).
+
+### Sheets app — design pass: app-style controls + a real participant form (2026-10-27, local only)
+
+After trying the first version the user asked for the editor to match the rest of the app (checkbox, radio, dropdown) and said
+the participant does not need to see a literal Excel. Changes in `sheets-andrejkatin`:
+- **Participant (and "Pregled kao učesnik") no longer use Univer.** New `FillTableComponent` (`src/app/fill-table/`) renders the
+  template as a clean table: header from the snapshot with its merges (colspan/rowspan) and column widths, sheet tabs as pills,
+  a "#" column, per-cell controls. Cells with offered values are `CellSelectComponent` (`shared/cell-select/`, same look as the
+  admin `app-select` but its list is `position: fixed`, so a scrolling table never clips it; keyboard: arrows/Enter/Esc), other
+  cells are plain inputs. **Rows open one after another**: only started rows plus the current one are rendered; the next row
+  appears once every required cell of the current row is filled (same `computeRowGate` rules; the footer names the missing
+  columns, empty required cells get a red tint, a tab shows a dot when its sheet has an unfinished row). Enter moves to the next
+  cell / next row, a row can be removed (rows below move up). Autosave is debounced 700 ms (`rowsChange`), `getRows()` returns the
+  clean sparse values. The server-side validation is unchanged. Univer is therefore only in the `designer-component` lazy chunk —
+  participants do not download it any more.
+- **Designer** keeps Univer (merge cells, widths, several sheets) but with `greenTheme`, a tinted header row, and the side panel
+  rebuilt from the admin design system: `.toggle-switch` for "required", `.segmented-control` for the cell mode (like column /
+  free input / own list), the admin `app-select` for the cell-required override, `app-options-editor` (`shared/options-editor/`)
+  for the offered values — chips, Enter adds, pasting several lines adds all, × removes (values already saved cannot be removed
+  while the template is locked), and an icon toolbar with a header-rows stepper. Shared control styles (`.text-input`,
+  `.field-label`, `.btn-ghost--small`, toggle, segmented control, shadow tokens) were added to `src/styles.scss`.
+- Verified in Docker/Playwright against a throwaway DB copy with the updated flow (`ui-sheets2.mjs`, 50 checks incl. chips,
+  comma refusal, strict dropdown, rows opening in order, remove row, autosave, reload, submit, locked link), dark + light
+  screenshots checked; production build clean.
+
+### Research design, variables, groups and the study wizard (2026-10-28, local only — phase 1 of 3)
+
+Plan: `C:\Users\Andrej\.claude\plans\create-a-claude-md-file-cozy-hinton.md`. A PROTOCOL research now carries a methodological frame
+next to its step list: what kind of study it is, optional variables and participant groups. Phase 2 (an "experimental session"
+step with task kinds Generic Task / Google Form / Sheets, plus a rules screen before the sheets table) and phase 3 (Code Review
+as a task kind) are NOT built yet.
+
+- **Isolation**: `Sql/035_research_design.sql` is additive. Every new route answers `400 NOT_PROTOCOL` for a CLASSIC research, so
+  research 1/10/90 and the live pilot are untouched (verified: no design/group rows, no participant has a group).
+  `Research.SetupComplete` defaults to TRUE; only a research made by the wizard starts FALSE.
+- **Schema**: `ResearchDesign` (1:1; approach, subject structure, time dimension, factor structure, control condition, blinding,
+  `AssignmentMode` MANUAL|RANDOM, hypotheses, notes — all optional, VARCHAR + CHECK), `ResearchVariable` (role INDEPENDENT/
+  DEPENDENT/CONTROL/MODERATOR/MEDIATOR/COVARIATE, name, levels JSONB), `ResearchGroup` (name unique per research, `Weight` for the
+  size ratio, `IsControl`), `GroupAssignmentRun` (method, seed, weights — a random draw is reproducible), and on `Participant`:
+  `GroupId` (FK, ON DELETE RESTRICT), `GroupAssignedBy`, `GroupAssignedAt`, `GroupAssignmentRunId`.
+- **Backend** (`admin-dashboard-andrejkatin/server/research-design/`, `/api/admin/research-design`, scope + OWNER/COLLABORATOR for
+  writes): `GET/PUT /:researchId` (design + variables + groups in one document; groups are an upsert by id because participants
+  reference them, deleting one that has participants is `409 GROUP_HAS_PARTICIPANTS`), `POST /:id/complete-setup`,
+  `PUT /:id/participants/:pid/group` and `PUT /:id/group-assignments` (manual; `409 GROUP_LOCKED` once that participant's protocol
+  has started), `POST /:id/randomize` (`preview:true` computes without writing). `randomize.mjs` is a pure function: seeded
+  (FNV-1a + mulberry32) "largest deficit" allocation, so group sizes follow the weights (equal weights differ by at most 1, 2:1 gives
+  14/7 of 21), existing group members are counted, only participants without a group are placed, the same seed gives the same result
+  whatever order the ids arrive in.
+- **Engine**: `advanceParticipant` refuses to start a participant who has no group when the research defines groups
+  (`GROUP_REQUIRED`; `start-all` reports them as failed). The protocol is the same for every group — a group is a label for analysis.
+- **Import**: the Participants sheet gets a `Group` column (strict dropdown from a hidden `_Groups` sheet, same pattern as
+  `_GenericTasks`) only when the research has groups; applied only to brand-new participants (existing ones are skipped, as for
+  Email/Language); an unknown name is a parse error client-side and "unknown" in the API result, not fatal.
+- **Where the group shows**: participant matrix + timeline, a Group dropdown per row (disabled once started), a group filter, the
+  questionnaire results table and CSV (Group column right after ParticipantId, only for researches with groups) and the sheets
+  Excel export (trailing Group column). The old TLX / REI-40 / Big Five exports are unchanged on purpose.
+- **Frontend**: `src/app/research-design/` (store + three section components + warnings + page `/design`, nav "Nacrt istraživanja"
+  first under Priprema for PROTOCOL researches), `src/app/study-wizard/` (route `/study-wizard`, superadmin): 1 Basics (creates the
+  research as PROTOCOL with `setupComplete:false`), 2 Type of study, 3 Variables (skippable), 4 Groups, 5 Protocol steps (the existing
+  `ProtocolComponent` with a new `hideHeader` input), 6 Review → "Finish" sets `SetupComplete`. The Researches page now has a
+  "Novo istraživanje" button instead of the inline form, an "Incomplete" marker and "Nastavi podešavanje" (reopens the wizard on step 2).
+  Soft design warnings never block saving (e.g. an experiment without random assignment, between-subjects with fewer than 2 groups).
+- **Not built (by decision)**: different steps per group, counterbalancing of condition order for within-subjects/crossover (the
+  design records it, groups can stand for orders by hand), stratified randomisation.
+- **Verified** against throwaway DB copies (Docker): `phase1-api-test.mjs` 62 checks (validation, upsert/locking, import, manual and
+  random assignment incl. ratio + preview + seed, GROUP_REQUIRED, roles/scope, group in results CSV and sheets export, classic
+  research untouched) and Playwright `ui-phase1b.mjs`/`ui-phase1c.mjs` (wizard end to end, /design, participants page with
+  preview→confirm random draw, filter, locked dropdown, import template + upload with the Group column). `ng build` development
+  and production clean.
+
+### Experimental session step + rules screen before the sheets table (2026-10-28, local only — phase 2 of 3)
+
+Second phase of the plan in `C:\Users\Andrej\.claude\plans\create-a-claude-md-file-cozy-hinton.md`. Phase 3 (Code Review as a task kind)
+is NOT built: the dropdown shows "Code Review AI (uskoro)" and the server answers `TASK_KIND_NOT_AVAILABLE`.
+
+- **`Sql/036_experiment_step_and_rules.sql`** (additive, idempotent): `StepType` CHECK gains `'EXPERIMENT'`; `SheetWorkbook.InstructionsSr/En`;
+  `SheetAccessLink.RulesAcknowledgedAt` + `RulesAckHash` (SHA-256 of the exact text the participant saw). The acknowledgement lives on the
+  link, not on `SheetEntry`, so reading the rules does not lock the template (it still locks at the first entry); re-minting a link
+  (`ON CONFLICT ... DO UPDATE` of token/expiry only) keeps it.
+- **Protocol step `EXPERIMENT`** (singleton; `server/protocol/routes.mjs`): `Config.taskKind` ∈ `GENERIC_TASK | GOOGLE_FORM | SHEETS | CODE_REVIEW`; the
+  description for the participant is the step's existing email text (`EmailMessageSr/En`). `SHEETS`/`CODE_REVIEW` can only be *newly chosen* by a
+  superadmin (`403 SUPERADMIN_ONLY_TASK_KIND`; re-saving a step that already has the kind is allowed for any OWNER/COLLABORATOR, so an owner can
+  still edit the rest of the protocol); changing the kind once anyone started is `409 PROTOCOL_LOCKED`. Saving mirrors the kind into the old
+  settings so the existing pages keep working: GENERIC_TASK → `TaskType='GENERIC'`, GOOGLE_FORM → `'GOOGLE_FORMS'`, SHEETS → `UsesSheets=TRUE`.
+- **Engine** (`server/protocol/engine.mjs`): per kind it mints the right link — GENERIC_TASK: `SurveyAccessToken` type `GENERIC_TASK` →
+  `TASK_APP_URL`; SHEETS: `SheetAccessLink` → `SHEETS_APP_URL`; GOOGLE_FORM: a `ProtocolStepLink` opened in the forms app. It never sends a link
+  that would open an empty page: `NO_TASK_ASSIGNED` (participant has no `GenericTaskId`), `NO_FORM_URL`, `NO_WORKBOOK`. Completion: GenericTaskSubmission
+  exists / SheetEntry SUBMITTED / the participant confirms the form in the forms app (`forms-andrejkatin` treats an EXPERIMENT+GOOGLE_FORM step as an
+  external link whose address is `Research.GoogleFormsUrl`, read live). `task-app-andrejkatin` and `sheets-andrejkatin` now call
+  `notifyProtocolEngine` after a submission (same helper as demographics/REI-40). The participant timeline shows the live link of an experiment step.
+- **Rules screen** (`sheets-andrejkatin`): the researcher writes SR/EN rules in the designer (new panel section; `PUT /api/research/:id/workbook/instructions`,
+  allowed even when the template is locked; the main Save persists it too). `GET /api/link/:token` returns the text in the participant's language
+  (else the other one) and withholds snapshot/rules/rows until the rules are confirmed; `POST /api/link/:token/acknowledge` is idempotent (first time +
+  hash kept); `PUT .../entry` and `POST .../submit` answer `403 RULES_NOT_ACKNOWLEDGED` until then. A table with no rules text opens at once, as before.
+  Participant UI: new `RulesScreenComponent` (also used for the designer's "Pregled kao učesnik", which shows the rules first), status `rules` in
+  `LinkAccessComponent`, a "Pravila" button to re-read them while filling. Admin "Tabele" page shows a Rules column and the time in the entry view;
+  the Excel export gets a trailing `RulesAcknowledged` column only when the template has rules.
+- **Admin UI**: the protocol editor offers "Eksperimentalna sesija" with a task-kind dropdown (restricted kinds hidden from non-superadmins), a
+  "Podesi zadatak" link; the menu follows the step (Task configuration + Results "Zadaci ispitanika" for GENERIC_TASK, Tabele for SHEETS); the Task
+  configuration page of a protocol research has no type dropdown; the import template of a GENERIC_TASK protocol gets the `GenericTask` column;
+  the participants page explains `NO_TASK_ASSIGNED / NO_FORM_URL / NO_WORKBOOK`.
+- **Not done**: grouping a Generic Task per group (idea: `ResearchGroup.GenericTaskId`), Code Review as a task kind (phase 3), CHECK/seed changes on Neon,
+  deployment of forms/sheets apps.
+- **Verified** on throwaway DB copies: `phase2-api-test.mjs` 61 checks (real admin + sheets + task-app + forms APIs, fake mail relay: validation, permissions,
+  mirroring, locking, NO_* blockers, link emails, acknowledgement incl. hash/idempotence/re-mint, 403 before confirmation, engine hook completing steps,
+  admin overview/entry/export, regression), Playwright `ui-sheets-rules.mjs` (designer panel, preview, participant flow in SR and EN, light theme),
+  `ui-phase2-admin.mjs` (step editor, kind options per role, menu, import template). `phase1-api-test.mjs` (62) and the phase 1 UI tests still pass.
+
+### Code Review AI as a protocol task kind (2026-10-28, local only — phase 3 of 3)
+
+Last phase of the plan in `C:\Users\Andrej\.claude\plans\create-a-claude-md-file-cozy-hinton.md`. Decisions made with the user before building: review mode =
+a default plus an optional per-group override; the PR is assigned **per participant** (Excel import or participants page); after the decision the existing
+NASA-TLX + short post-session questionnaire flow stays (the step is done when it finishes); an Intro session is an optional switch, off by default.
+
+- **`Sql/037_protocol_code_review.sql`**: `Participant.CodeReviewPrConfigId` (FK `ResearchPrConfig`, ON DELETE SET NULL). Everything else lives in the step's Config JSON:
+  `{ taskKind:'CODE_REVIEW', defaultMode:'AI'|'REPORT'|'HYBRID', modeByGroup:[{groupId,mode}], includeIntro }`. Saving mirrors `TaskType='PR_REVIEW'` (+ `TracksParticipants`);
+  only a superadmin can newly choose the kind; group ids are validated against the research; once any participant started, the whole Code Review config is locked (`409 PROTOCOL_LOCKED`).
+- **Engine** (`server/protocol/engine.mjs`): `reviewPlan(step, participant)` gives the sessions (Intro=1 first if on, then AI=2 / Report=3 / Hybrid=4 from the group override or the default).
+  Blockers before anything is sent: `NO_MODE`, `NO_PR_ASSIGNED`, `NO_INTRO_PR` (intro on but no `IsIntro` PR). Sending creates the `ParticipantSession` rows (PR = the participant's, Intro uses the research's
+  intro PR as in the classic flow), mints a `CODE_REVIEW` token (effectively permanent, like the classic one) and emails `CODE_REVIEW_APP_URL/?link=<token>`. The step is done when every planned session is finished.
+- **Code Review backend** (`StudyService.GetLoginStateAsync`): reads `Research.FlowMode`; the baseline (EEG) gate that blocks the second session is skipped for PROTOCOL researches only. Nothing else changed in C#; `dotnet test` 40/40.
+- **NASA-TLX** (`api/db/session-finished.ts` + `server.ts` mirror): for a protocol research it notifies the engine after flipping `IsFinished` and answers `{ok, protocol:true}`;
+  the post-session page then treats the Intro like any other session (back to the review app) instead of the classic "researchers will contact you" popup. The embedded TLX is the instrument,
+  so a protocol with Code Review should not also contain a separate NASA-TLX step (hint in the editor, not enforced).
+- **PR assignment**: Participants sheet `Task` column (strict dropdown from a hidden `_PrTasks` sheet, intro PR excluded; brand-new participants only), a PR dropdown per row on the participants page
+  (`PUT /api/admin/protocol-progress/:rid/participants/:pid/pr-task`, `409 PR_LOCKED` once the step was delivered), start disabled without a PR, the participant page shows the PR, the review sessions and a link to
+  the full participant page (`/participants/:id`, existing decision/chat/activity views).
+- **Admin UI**: Code Review is a normal choice in "Vrsta zadatka" (the "uskoro" mark is gone) with a default-mode dropdown, one dropdown per group, the intro switch; Task configuration (the PR editor) is shown for it.
+- **Not done**: a protocol-level results page for review decisions/chat (use the participant page), grouping the PR per group, counterbalancing, Neon migration/deployment.
+- **Verified** on throwaway DB copies: `phase3-api-test.mjs` 42 checks (real admin API + the real .NET backend published to a temp dir + the built NASA-TLX server + fake mail relay: validation, roles, mirroring,
+  import Task column, PR assignment/locking, blockers, session rows, link, link-login (AI/Hybrid/Intro→main), session-finished completing the step and sending the next one, classic baseline gate and `protocol:false`
+  unchanged), Playwright `ui-phase3-admin.mjs` (editor, import template and upload, participants page), `phase1` (62) and `phase2` (61) API tests and the phase 2 admin UI test still pass; admin and NASA-TLX production builds clean.
+
+### "Other" task kind and a visual wizard review (2026-10-28, local only)
+
+- **Task kind `OTHER` ("Drugo (opisno)")** in the EXPERIMENT step, for a task the platform has no module for. The researcher describes it in the step's email text (required in
+  both languages, `400` otherwise); the participant gets an email without a link, the step stays SENT and the researcher marks it done in the participant list (like the in-person step).
+  Open to every OWNER/COLLABORATOR (not superadmin-only), it mirrors nothing into `Research.TaskType`, no menu entry follows from it. The step type `MANUAL` ("Korak uživo") already covered
+  fully offline steps. **Not done**: the same free "Drugo" + text for the study design fields (approach, structure, ...) and variable roles.
+- **Wizard review (step 6)** is now cards instead of a plain list: basics, study type (unspecified values muted), variables with role badges and level chips, groups with the size ratio and
+  assignment mode, and a flow diagram of the protocol (`app-protocol-flow`, `src/app/protocol/protocol-flow.component.ts`): steps top to bottom, the wait on the connectors ("posle 3 dana",
+  "kad ga ti pokreneš"), who acts (participant / researcher / only a message), task kind, Code Review mode per group. Verified in Docker/Playwright (`ui-review.mjs`, dark and light theme).
+
+### Protocol editor autosaves; neutral consent/demographic templates (2026-10-29, local only)
+
+- **No "Sačuvaj protokol" button.** `ProtocolComponent` sends every edit ~800 ms after the last change (`markDirty` → `autosave`). An edit that is not valid yet (message without text, link without
+  address, "Drugo" without description ...) waits and the status line under the list says what is missing; the next edit retries. After a save the editor only copies the new step ids and
+  participant counts onto the steps on screen (`adoptSavedIds`) — it does not reload the list, so typing is never overwritten and a second save does not duplicate a new step. Leaving
+  the page inside the pause still saves (`ngOnDestroy`), closing/reloading the tab asks the browser to confirm (`beforeunload`), and the study wizard calls `flush()` before it reads the protocol back.
+- **Neutral templates for protocol researches.** `seedDefaultsIfEmpty` (consent-sections and demographic-questions) now checks `Research.FlowMode`: a PROTOCOL research gets `GENERIC_CONSENT_SECTIONS`
+  (purpose, voluntariness, confidentiality, contact — no study details, no contact address) and `GENERIC_DEMOGRAPHIC_QUESTIONS` (gender, age as free text, education) instead of the BeyondAI
+  study's 12 sections / 12 questions. CLASSIC researches (1, 10, 90) still get the originals. The researcher edits them on the Consent form / Demographic questionnaire pages.
+  Participants of a protocol research open consent in the forms app, which reads the sections from the DB only (it never seeds), so the seeding that matters is the protocol save.
+  **Not changed**: `consent-andrejkatin` (classic flow) still has its own copy of the BeyondAI defaults and a fixed header with the study title and team — it is not used by protocol researches.
+- Verified in Docker/Playwright (`ui-autosave.mjs`, 22 checks) and the wizard review test still passes; production build clean.
+
+### Sheets app: formatted introduction page + no arrows/dashes in the preview (2026-10-29, local only)
+
+- **The rules screen (introduction before the table) is now formatted text.** `sheets-andrejkatin` designer: the two textareas are gone; the panel shows "Napisano / Nema teksta" per language and an
+  "Uredi" button that opens a large dialog (Serbian / English tabs) with a rich-text editor (`RichTextEditorComponent`, TipTap 2 on ProseMirror): normal text / heading / subheading, font (6 web-safe
+  fonts), size (13-28 px), bold, italic, underline, strikethrough, text colour (8 colours that read on dark and light), bulleted and numbered lists, quote, left/centre/right/justify, link, clear formatting,
+  undo/redo. Saving still goes through `PUT /api/research/:id/workbook/instructions` (the "Sačuvaj pravila" button, also allowed once participants started).
+- **Stored as HTML, sanitized on every write and every read** (`server/rich-text.mjs`, `sanitize-html` pinned to 2.13.1 because 2.14+ needs a version of htmlparser2 that Node 20 cannot `require`): only the
+  tags and CSS properties the editor can produce survive (p, br, strong/b, em/i, u, s, h2, h3, ul, ol, li, blockquote, hr, a with http/https/mailto, span; styles font-family, font-size 10-36 px, text-align, colour);
+  scripts, handlers, `javascript:` links, positions etc. are dropped. Older plain-text rules are turned into paragraphs on read, an empty editor (`<p></p>`) is stored as no rules (NULL). The participant's
+  `RulesAckHash` is now the hash of the sanitized HTML. The client has a second line of defence (`shared/rich-text/safe-html.ts`) and renders with `[innerHTML]` through a trusted result, because Angular's own
+  sanitizer removes every `style` attribute. Content styles are the global `.rich-content` class (`styles.scss`), shared by the editor and the read-only view.
+- **Arrows and dashes removed**: designer back link ("← Istraživanja" is now plain text), column-range badge ("A–C" is now "A:C"), the cell dropdown's default clear label, and the admin Tabele page's "—"
+  fallback for a missing table title ("bez naslova"). The table preview strings themselves had none. **Not changed**: "→" in a few admin protocol links (e.g. "Podesi zadatak →", "Uredi obrazac pristanka →").
+- Old test `ui-sheets-rules.mjs` (textareas) is obsolete; `ui-rich-rules.mjs` replaces it (26 checks: formatting through the toolbar, stored HTML, hostile markup, preview, participant view, legacy plain text, no arrows).
+  `ui-sheets2.mjs` still passes; production build clean.
+
+### Fully automated study with several sheet templates: groups x tasks, availability window, mail queue (2026-10-30, local only)
+
+Goal (user's own study): 2 groups (control/treatment) x 2 tasks (A/B) = 4 different tables. The researcher imports participants, the platform draws group and
+task, the researcher confirms, consent mail -> (consent) -> demographic mail -> (demographics) -> later "send the tables" -> every participant gets THEIR template,
+which only opens inside the availability window. Plan file: `C:\Users\Andrej\.claude\plans\create-a-claude-md-file-cozy-hinton.md`. Migrations
+`Sql/038_research_tasks_and_sheet_slots.sql`, `039_sheets_window.sql`, `040_email_outbox.sql` (additive, idempotent; applied to the **local** dev DB only; Neon not touched).
+All new admin routes are PROTOCOL-only (`NOT_PROTOCOL` otherwise); research 1/10/90 are untouched.
+
+- **Tasks as a second factor** (`ResearchTask`, `Participant.ResearchTaskId/TaskAssignedBy/At`; edited next to the groups on /design and in the wizard, step 4). `randomize.mjs`
+  `randomizeStratified`: groups first (weights), then inside every group the tasks (weights, seed `${seed}:g${groupId}`), values already given are kept and counted.
+  `research-design/assign.mjs` (`planAssignment`/`applyAssignment`/`summarize`) is used by the `/randomize` route (preview -> confirm with the same seed, `reset:true` re-draws only
+  unstarted people a previous random run placed) and by the **import**: with `ResearchDesign.AssignmentMode = 'RANDOM'` the people a `POST /import` creates are drawn right away (Excel
+  `Group` / new `ResearchTask` columns win), nothing is sent; the response has `autoAssignment` (seed, cells). `GroupAssignmentRun.Params` stores every input, so a run can be replayed exactly.
+  Engine: `TASK_REQUIRED` (like `GROUP_REQUIRED`) when the research has 2+ tasks; `PUT /research-design/:rid/participants/:pid/task` (`TASK_LOCKED` after the start).
+- **Participant list** (/protocol-participants): Task column + filter, group x task counts table, the button "Potvrdi raspored i pošalji (N)" (= `start-all`), "Ponovo nasumično" (reset), and
+  for the experiment step "Pošalji „Tabela" svima koji su spremni (N)" -> `POST /protocol-progress/:rid/steps/:stepId/send-all` (only people whose earlier steps are done, `force` overrides).
+- **Several templates per research**: `SheetWorkbook` is a slot (`GroupId`, `ResearchTaskId`, NULL = any; unique per research+slot; the old `UNIQUE(ResearchId)` is gone). `admin/server/sheets/resolve.mjs`
+  `pickWorkbook`: exact (group,task) -> group only -> task only -> default, else `NO_TEMPLATE` (engine blocker, reported by send-all, never emailed an empty page). The sheets app API is by template id
+  (`/api/research/:id/workbooks[/:wbId][/instructions|/rules|/duplicate]`), a template list page (`/research/:id`: create all missing combinations, copy, delete, `SLOT_TAKEN`), the designer
+  (`/research/:id/workbook/:wbId|new`) has label + group/task selectors. Locking is per template. Admin Tabele page: Group/Task/Template columns, template filter, per-template export (`?workbookId=`),
+  "export all" (one sheet per template, label prefix). A link left over from an old slot is removed when a new one is minted (`upsertSheetLink`).
+- **Availability window** (`Research.SheetsOpensAt/ClosesAt`, one window for the whole research, set on the Tabele page, `PUT /api/admin/sheets/:rid/window`): the sheets `resolveLink` answers
+  `423 NOT_OPEN_YET` / `410 CLOSED` (also for acknowledge, autosave, submit; "already submitted" wins over closed) with the times and the participant's `lang`; the participant sees "not open yet"
+  (opens by itself when the time comes, shown in Belgrade time) or "time is over". Links may be mailed early; a closing time beyond a link's life extends it. The mail says when it opens instead of "valid 7 days".
+  **Bug found and fixed**: browsers cached the 410/423 answers, so a reload showed "closed" after the window had opened; `/api/link` now sends `Cache-Control: no-store`.
+- **Mail queue** (`EmailOutbox`, `server/email/outbox.mjs`): the protocol engine and the Tabele bulk send write to the outbox; `drainOutbox` sends at most `MAIL_DAILY_LIMIT` (default 90) per 24 h (all researches share the
+  relay quota), retries transient failures (10, 20, 40 ... min, 6 attempts then FAILED), treats the relay's quota error as "wait 3 h, do not count the attempt". Drains: right after enqueue (`kickOutbox` via
+  `waitUntil`), `GET /api/cron/mail-outbox` (Bearer `CRON_SECRET`), the daily protocol sweep, a 1-minute timer in local dev, and the researcher's "Pošalji sada" / "Pokušaj ponovo neuspele" (`/api/admin/mail-outbox/:rid`).
+  `MAIL_OUTBOX_INLINE=true` makes enqueue wait for the drain (tests). Single-recipient sends (one link, invites) still go directly. **For production**: the free Vercel plan has only 2 daily crons (both used), so the main
+  trigger is `admin-dashboard-andrejkatin/.github/workflows/mail-outbox.yml` (every 10 min; repo secrets `ADMIN_API_URL` and `CRON_SECRET`). 100 participants x 3-4 mails = 3-4 days on the free relay.
+- **Verified** (throwaway DB copies, real servers): `auto3-test.mjs` 44 checks (the whole chain import -> consent -> demographics -> send tables, window, queue, cron), `auto2-test.mjs` 42 (templates, slots, engine,
+  export, re-assignment), `auto1-test.mjs` (Docker/Playwright: draw on import, list, confirm, re-draw, locks, Excel import), `ui-templates.mjs` (sheets list/copy/delete/designer slots, window screens),
+  `ui-auto4-admin.mjs` (send-all, queue bar, Tabele page, window), randomize unit tests; old suites adapted and green: phase1 (62), phase2 (61), `ui-sheets2`, `ui-rich-rules`, `ui-autosave`, `ui-review`.
+  **Not re-run**: `phase3-api-test.mjs` (needs `dotnet` + the published backend; the only change it could feel is that engine mails now go through the outbox). `ui-sheets-rules.mjs` is obsolete.
+- **Not done**: Neon migrations 038-040 + deployment of forms/sheets/task/demographics apps, the GitHub secrets, a "generate consent text from the research data" button (consent and demographics start from a neutral
+  template, edited by hand), different protocols per group, per-group/per-participant windows, a protocol step that sends the table by date/time (the researcher sends it by hand).
+
+### Sheets template page redesign (2026-10-30, local only)
+
+- The list page of the sheets app (`/research/:id`, opened by the admin Tabele page button) is now left-aligned and self-explaining: a short "how a template is tied to a group and task" card, a **group x task grid** (existing template = click to edit, empty cell = "Napravi sablon" creates an empty template for exactly that slot and opens the designer), "create all empty (N)", the full list (edit / copy / delete) and a **"Novi sablon" form** (name, group, task, hints; a taken slot is refused with a message). Without groups/tasks there is no grid and the form has only a name.
+- `authGuard` now sends `?returnUrl=` to `/login` and the login returns there, so the admin link lands directly on the list instead of on the researches page. Tasks and groups themselves are still defined in the admin dashboard on the "Nacrt istrazivanja" page (section Zadaci); a template is tied to a task by its group/task selectors (grid cell, new-template form or the designer toolbar). Test: `ui-tpl-page.mjs` (all pass).
+
+### Research design: specific save errors (2026-10-30, local only)
+
+- "Cuvanje nije uspelo. Proveri unos i pokusaj ponovo." on /design meant the server refused the whole document with a plain-text 400 (almost always an empty group/task/variable row left by "add"), and the store mapped every unknown error to the generic key. `ResearchDesignStore.save()` now checks blank names before sending (`EMPTY_GROUP_NAME` / `EMPTY_TASK_NAME` / `EMPTY_VARIABLE_NAME`), maps the server messages for names and weights, and the study wizard shows the same specific text. Test: `ui-design-errors.mjs`.
+
+- **Weights removed from the UI (2026-10-30)**: groups and tasks no longer have a "size ratio" field on /design, in the study wizard or in its review; the random draw fills groups evenly. The `Weight` columns and the server code stay (default 1, so the draw is unchanged for equal weights); the design store sends weight 1 on every save, which also resets an older unequal weight. Tests: `ui-design-errors.mjs`, `ui-review.mjs` (the old `ui-phase1b.mjs` is obsolete in other steps too).
+
+### Sheets participant view: no group name, header titles, example rows, wrap text (2026-10-30, local only)
+
+- **The participant never sees the group.** The only group-bearing text they received was the template **title** (h1 and the rules screen): the grid/list "Napravi sablon" used to copy the internal label ("Control / Task A") into it. Now a new template gets the task name (or "Tabela") as its title, and the link API (`participantTitle()` in `sheets-andrejkatin/server.mjs`) replaces any title that contains a group name of the research by the task name, so older templates are covered too. The API sends no label or group data. The designer placeholders say the title is for the participant and the label is internal; the template list explains it (HOW_4).
+- **Header titles**: header text is read from a Univer cell with `cellText()` (plain `v` or rich-text `p.body.dataStream`); the column titles kept in the rules now come from the lowest non-empty header cell of the column (a merged or empty cell below no longer blanks them). The designer warns (banner) when text sits **below the header rows** (the participant sees only the header rows) - the likely cause of "only columns A and D show" when the header-rows counter was lower than the rows the researcher typed in. Real keyboard typing of a 5-column header was verified to save and show correctly (`ui-header-typing.mjs`).
+- **Example rows**: `SheetRules.examples` (up to 5 sparse rows `{col: text}`, validated in `server/rules.mjs`, shifted with column insert/delete, editable even when the template is locked because they are display-only). Researcher: panel section "Primeri" + dialog with one textarea per column. Participant: a labelled "Primeri" band under the header, the read-only rows (italic, tinted), a "Vas unos" band, then their own rows numbered from 1. Examples are not part of an entry or the Excel export.
+- **Wrap text**: participant cells are auto-growing textareas (`shared/auto-grow.directive.ts`, a pasted line break becomes a space, Enter still moves on), dropdown cells and options wrap, headers wrap (the sticky header is now the `thead`, so wrapped multi-row headers stay aligned), and the designer header/example rows use Univer `setWrap(true)` so rows grow. Tests: `ui-participant-fixes.mjs` (32 checks), `ui-tpl-page.mjs`, `ui-templates.mjs`, `ui-sheets2.mjs`, `ui-rich-rules.mjs`.
+
+- **Notes on header cells (2026-10-30)**: `SheetRules.notes` = `{"row,col": text}` (header cells only, up to 1000 characters, validated in `server/rules.mjs`, moved with column insert/delete, dropped when the header shrinks past them, editable also on a locked template like the examples). Designer: select a header cell, the panel shows "Napomena za ovo polje" plus a list of all notes of the sheet. Participant: a small "i" mark next to the title; the text shows in a fixed tooltip on hover, keyboard focus or tap (also in a screen-reader-only span). The note is one text, not per language (the header title is not per language either). Test: `ui-header-notes.mjs` (19 checks).
+
+- **Gotcha (2026-10-30)**: "examples and notes vanish after saving" was a **stale sheets API process** (4317, started before `server/rules.mjs` learned `examples`/`notes`): the old `normalizeRules` silently drops unknown fields, so the designer showed them but the server never stored them (and copies were made from the stored rules). The Angular dev server hot-reloads, the Node API does not - restart it after changing `server.mjs` or `server/*.mjs` (`LOCAL_DATABASE_URL=...:5434/beyondai_dev npm run serve:api`, because `.env.local` points at the foreign 5433 container). `ui-persist.mjs` covers first save, save again, reopen, copy and a locked template. The "Kopiraj" button is hidden for a research without groups/tasks (there is no free slot to copy into).
+
+- **The group must never be visible - preview fix (2026-10-30)**: the designer's "Pregled kao ucesnik" kept the editor bar on screen, which shows the template label and the "Za: <group> / <task>" selectors (the researcher reads a preview as the participant's view). In preview mode the bar now holds only "Pregled kao ispitanik" and "Nazad na uredjivanje" (no label, group, task, title field or research name). The designer also warns (red banner, non-blocking) when a group name of the research appears in something the participant reads: table title, introduction, column titles / offered values, examples / notes, sheet names. Verified on the real templates of the dev DB copy: link API JSON and rendered pages of all templates contain no group name, no label, no group/task ids. Test: `ui-nogroup.mjs` (22 checks).
+
+### Task PDF: the written task is read in the platform (2026-10-30, local only)
+
+- **Where it is defined**: each `ResearchTask` (research design page /design and wizard step 4, same `tasks-section` component) can carry one PDF: `Sql/041_research_task_pdf.sql` (`PdfFilename/PdfData BYTEA/PdfSize/PdfUpdatedAt`, additive, applied to the **local** dev DB only; Neon not touched). Admin API `PUT|GET|DELETE /api/admin/research-design/:rid/tasks/:taskId/pdf` (multer memory, up to 25 MB, must contain `%PDF-`, OWNER/COLLABORATOR write, any member reads, PROTOCOL research only). A task must be saved before it can take a PDF; the design-document save never touches the PDF columns; the document reports `hasPdf/pdfName/pdfSize` (never bytes).
+- **What the participant sees** (sheets app): the introduction page now shows the rules text **and the task PDF** (viewer under the text); a task with a PDF but no rules text still gets an introduction ("Pregledao/la sam zadatak") that must be confirmed before the table opens (`RulesAcknowledged = (!text && !pdf) || acked`, the ack hash covers the rules text plus the PDF size). While working, a "Zadatak (PDF)" button opens the PDF again in a window over the table. API: `/api/link` returns only `hasPdf`; `GET /api/link/:token/task-pdf` serves the participant's own task (their `ResearchTaskId`, else the template's) inline as `task.pdf` (the original file name never leaves the admin), no-store, same link/expiry/window checks (410/423), readable before the rules are confirmed. The designer's "Pregled kao ucesnik" shows the same through `GET /api/research/:id/workbooks/:wbId/task-pdf` (researcher login).
+- **Viewer**: `shared/pdf-viewer` (pdf.js, `pdfjs-dist@3.11.174`, loaded on demand as a ~300 kB chunk, worker kept as a copy in `src/assets/pdfjs/pdf.worker.min.js` (`scripts/copy-pdf-worker.mjs`, run by postinstall / `npm run pdfjs:sync`)): one canvas per page, width-fit with zoom steps, lazy drawing, "open in a new window". No text layer (text cannot be selected). A CommonJS bundle arrives under `default` of the dynamic import.
+- **Gotcha**: restart the sheets API (4317) and the admin API (4312) after pulling this (new routes); Node servers do not hot-reload. Tests: `ui-task-pdf-admin.mjs` (25), `ui-task-pdf-sheets.mjs` (28), `ui-task-pdf-preview.mjs` (8).
+- **Bug (2026-10-30): "PDF nije mogao da se ucita" on the dev server.** The worker was first added through an `angular.json` assets glob; a running `ng serve` does not pick up angular.json changes, so `/pdfjs/pdf.worker.min.js` was a 404 there while the production-build tests passed. Moved to `src/assets` (served immediately, no restart) and verified against a real dev server (`dev-pdf-check.mjs`). Lesson: check UI features on the dev server too, not only on a fresh build.
+- **Full-window reader (2026-10-30)**: with a task PDF the introduction is no longer a centred card: `RulesScreenComponent` renders `.rs-full` (height = window minus the 60 px app header, edge to edge): a bar with the title, "Pravila"/"Sakrij pravila" (the rules text is a collapsible block above the PDF), **"Otvori u novom tabu"** and the primary **"Pročitao/la sam, nastavi na tabelu"** ("Nastavi na tabelu" when there is no rules text), then the PDF filling the rest (`PdfViewerComponent` `fill` mode, pages at most 1000 px wide at 100%, no page scroll, works at phone width). The window over the table ("Zadatak (PDF)") is up to 1400 px wide. The designer preview uses the same reader (`--rs-height: calc(100vh - 250px)`). Without a PDF the old card is unchanged.
+- **Not done**: Neon migration 041 and deployment of the sheets app; a text layer / search inside the PDF; PDF per group (it is per task, so every group of a task sees the same file).
+
+### Termini u eksperimentalnoj sesiji: učesnik, grupa ili svi; online ili uživo (2026-11-02, local only)
+
+- **Šta**: u PROTOCOL istraživanju se unutar eksperimentalne sesije (dan u kalendaru) zadaju **termini**. Termin ima jedno vreme (+ trajanje 5-480 min), tip **Online** (link sastanka je opcion, http/https)
+  ili **Uživo** (lokacija je obavezan tekst), publiku **jedan ili više učesnika / cela grupa / svi** i opciono korak protokola. Za 1 na 1 se pravi po jedan termin za svakog. Stari tok zakazivanja
+  po sesiji Intro/AI/Report (`ParticipantSession.ExperimentalSessionId`) važi samo za CLASSIC istraživanja (1, 10, 90 i pilot) i nije dirnut; nove rute odbijaju CLASSIC sa `NOT_PROTOCOL`.
+- **Šema** `Sql/042_session_slots.sql` (aditivno, primenjeno samo na **lokalnu** bazu): `SessionSlot` (vreme, tip, link/lokacija, `AudienceType`, `GroupId` ON DELETE RESTRICT, `ProtocolStepId` ON DELETE SET NULL,
+  napomena, tag, Google događaj) i `SessionSlotAttendee` (`ParticipantGuid`, ne goli `ParticipantId`). Publika se razreši pri pravljenju termina i upiše; novi član grupe se dodaje dugmetom
+  "Dodaj nove članove grupe" (ništa se ne menja tiho). Usput dodata kolona `ParticipantSession.GoogleCalendarEventUrl` (kod ju je koristio, a migracije nije bilo).
+- **Backend** (`admin-dashboard-andrejkatin/server/session-slots/`, `/api/admin/session-slots`, poseban router): `GET|POST /:experimentalSessionId`, `PUT|DELETE /slot/:id`, `POST /slot/:id/attendees`
+  (izabrani ili `syncGroup`), `DELETE /slot/:id/attendees/:guid`, `PUT /slot/:id/notes-tags`. Greške: `INVALID_URL`, `LOCATION_REQUIRED`, `GROUP_REQUIRED`, `UNKNOWN_GROUP`, `NO_ATTENDEES`,
+  `ALREADY_SCHEDULED {conflicts}` (isti učesnik, isti korak; `skipConflicts:true` preskače zauzete). Pisanje OWNER/COLLABORATOR, čitanje svi članovi.
+  Google kalendar: jedan događaj po terminu sa svim pozvanima koji imaju mejl (`slot-calendar.mjs`, `buildSlotEvent`); događaj nosi samo labelu sesije, link ili lokaciju. **Interna napomena, nazivi
+  koraka i grupa ne idu u poziv** (gosti su učesnici). `googleCalendar.mjs` `createEvent/updateEvent` dobili opciona polja `location/description/summary/attendeeEmails`. Pomeranje dana (`PUT /:id`)
+  pomera i događaje termina, brisanje dana briše termine (CASCADE) i njihove događaje, `reminderJob` broji i termine, brisanje grupe koja je meta termina je `409 GROUP_HAS_SESSIONS`.
+  `GET /experimental-sessions` vraća `slotCount`, `GET /:id` vraća `flowMode`; matrica učesnika vraća `nextSlot`, vremenska linija učesnika `slots`.
+- **UI**: detalj sesije u PROTOCOL istraživanju prikazuje `SessionSlotsComponent` (`src/app/experimental-sessions/session-slots/`) umesto tabele i kartice "Dodeli"; modal "Novi termin" (vreme, trajanje,
+  Online/Uživo, publika, korak, pregled "Biće pozvano: N, bez mejla: M"), kartice termina (izmena, čipovi pozvanih sa uklanjanjem, dodavanje, oznaka, brisanje), lista i kalendar broje termine, lista učesnika
+  pokazuje "Termin <datum vreme>", stranica učesnika "Termini". Prevodi `SESSION_SLOTS.*`.
+- **Verifikovano** (Docker, kopija baze): `slots-test.mjs` 71 provera (validacije, tri vrste publike, konflikti po koraku, izmene, dodavanje/uklanjanje, `syncGroup`, uloge, `NOT_PROTOCOL`, brisanje i kaskada,
+  `buildSlotEvent`), Playwright `ui-session-slots.mjs` (modal, Online/Uživo, publika, kartice, telefon, tamna i svetla tema, klasično istraživanje ima staru karticu), `phase1-api-test.mjs` 62.
+  **Napomena**: `phase2-api-test.mjs` povremeno pada (21/7 ili 38/1: mejl za korak SHEETS stigne posle provere), isto i kada je novi ruter isključen, dakle ranije postojeća trka u testu, ne ova izmena.
+  Google događaji nisu probani uživo (nema povezanog naloga u testu), proveren je samo sadržaj događaja.
+- **Nije urađeno**: pojedinačno vreme po učesniku pri grupnom zadavanju, slanje poziva preko platforme umesto Google-a, automatski Meet link, Neon migracija 042, deploy. Restartuj admin API (4312) posle povlačenja.
+
 ### Next planned improvements
 - Add a `UserSecretsId` reminder to the README / onboarding docs
 - Persist session ID in `sessionStorage` so a browser refresh reconnects to the same session
