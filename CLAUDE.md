@@ -3662,6 +3662,18 @@ All new admin routes are PROTOCOL-only (`NOT_PROTOCOL` otherwise); research 1/10
   Google događaji nisu probani uživo (nema povezanog naloga u testu), proveren je samo sadržaj događaja.
 - **Nije urađeno**: pojedinačno vreme po učesniku pri grupnom zadavanju, slanje poziva preko platforme umesto Google-a, automatski Meet link, Neon migracija 042, deploy. Restartuj admin API (4312) posle povlačenja.
 
+### Formatirani tekst u sekcijama informisanog pristanka (2026-11-02, u produkciji)
+
+- Svaka sekcija pristanka (admin stranica "Obrazac pristanka") se uređuje u pravom editoru (TipTap, isti kao u sheets aplikaciji, bez izbora fonta/veličine): običan tekst / naslov / podnaslov,
+  podebljano, kurziv, podvučeno, precrtano, boja, tačke i numerisana lista, citat, poravnanje, link, poništi/ponovi. Naslov sekcije i tekst uz polje za saglasnost ostaju običan tekst.
+- Telo sekcije se čuva kao **HTML**, očišćen na svakom upisu (`admin-dashboard-andrejkatin/server/rich-text.mjs`, `sanitize-html` 2.13.1, isti kao u sheets) i na svakom čitanju
+  (admin GET, `consent-andrejkatin/server.mjs`, `forms-andrejkatin/server.mjs`; po jedna kopija `server/rich-text.mjs` u sva tri). Stari čist tekst se pri čitanju pretvara u pasuse, pa se
+  ništa nije migriralo. Prazan editor (`<p></p>`) se odbija (`400`), granica je 40000 znakova HTML-a. Klijent ima drugu liniju odbrane (`safe-html.ts`) i prikazuje preko `[innerHTML]`
+  sa `bypassSecurityTrustHtml` (Angularov sanitajzer bi uklonio style atribute); stilovi sadržaja su globalna klasa `.rich-content`.
+- Prikazuje se u admin pregledu, u consent aplikaciji (klasični tok) i u forms aplikaciji (korak CONSENT protokola). Šema nije menjana.
+- Verifikovano: `rich-consent-api.mjs` 12 provera (sanitizacija, stari tekst, prazno, predugo), Playwright `ui-rich-consent.mjs` 13 provera (editor, čuvanje, forms stranica), produkcijski
+  build sva tri frontenda; objavljeno na Vercel (admin, consent, forms), produkcijski API odgovara. Restartuj lokalne API-je posle povlačenja (stari procesi ne vide novi kod).
+
 ### Next planned improvements
 - Add a `UserSecretsId` reminder to the README / onboarding docs
 - Persist session ID in `sessionStorage` so a browser refresh reconnects to the same session
