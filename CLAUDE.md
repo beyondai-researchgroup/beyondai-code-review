@@ -3697,3 +3697,18 @@ All new admin routes are PROTOCOL-only (`NOT_PROTOCOL` otherwise); research 1/10
 - Write Angular component unit tests (Jasmine)
 - Parallelize per-file full-content fallback fetches in `OctokitApiAdapter` (currently sequential)
 - Throttle the post-reply suggestions call (currently one extra Claude call per chat turn)
+
+### Sheets: najranija predaja, upitnik odmah posle predaje, stanje rada, relej po istraživanju (2026-11-03, u produkciji)
+
+- **Relej po istraživanju** (`Sql/046_mail_relay_key.sql`): `Research.MailRelayKey` bira poseban Apps Script relej (drugi Google nalog, pa mejl stiže sa te adrese); URL i tajna su u okruženju
+  `MAIL_RELAY_URL_<KEY>` / `MAIL_RELAY_SECRET_<KEY>` (admin Vercel projekat), u bazi je samo ključ. Ključ bez podešenih promenljivih je greška (nikad tiho slanje sa pogrešne adrese). `EmailOutbox.RelayKey`
+  nosi ključ uz poruku. Pokriva mejlove protokola i Tabela iz admina (outbox + `emailLink`); mejlovi "regeneriši linkove" i mailing lista ostaju na podrazumevanom releju. Istraživanje 91 (MICOBISE) koristi ključ `andrej`
+  (katin.andrej96@gmail.com), privremeno; vraća se sa `UPDATE "Research" SET "MailRelayKey" = NULL WHERE "Id" = 91`. Dnevna kvota je po Gmail nalogu (100), outbox broji sve poslato zajedno (limit 90).
+- **Najranija predaja** (`Sql/047_sheets_min_submit.sql`, `Research.SheetsMinSubmitMinutes`, polje uz vreme za rešavanje na stranici Tabele; mora biti manje od vremena za rešavanje): dugme "Završi i predaj" je zaključano
+  do `RulesAcknowledgedAt + minuta` ("Predaja za mm:ss", po satu servera); server odbija ručnu predaju ranije (`409 TOO_EARLY`); predaja zbog isteka tajmera važi uvek.
+- **Upitnik odmah posle predaje**: na koraku UPITNIK koji dolazi odmah posle koraka Eksperimentalna sesija (Tabele), AUTO isporuka, prekidač `Config.openImmediately` (zaključan posle prvog slanja, `OPEN_IMMEDIATELY_INVALID`
+  ako nije odmah posle Tabela). Sheets server javlja motoru `immediate:true`; motor pravi link i vraća `openUrl` bez mejla, a predaja vraća `nextUrl` i stranica ide na upitnik. Predat link (`409 ALREADY_COMPLETED`) takođe nosi
+  `nextUrl` dok upitnik nije popunjen (isteklo vreme dok je ispitanik odsutan, zatvorena stranica, prekid veze): motor tada vraća postojeći link koraka. Bez prekidača upitnik stiže mejlom kao pre.
+- **Stanje rada** na listi učesnika (korak sa Tabelama): `activity` NOT_OPENED / STARTED / WORKING / SUBMITTED / TIMED_OUT (iz `SheetAccessLink.RulesAcknowledgedAt` i `SheetEntry`), ikone ● ▸ ✎ ✓ i tekst na stranici učesnika.
+- **Izgled tabele učesnika**: nema unutrašnjeg prozora sa skrolom, skroluje se cela strana; tajmer je gore levo u traci koja ostaje vidljiva, zaglavlje kolona ostaje ispod nje (`--fill-sticky-top`).
+- Verifikovano: `minopen-test.mjs` 46 provera (pravi admin, sheets i forms API na kopiji baze, lažni relej), `ui-minlayout.mjs` 12, `ui-alwaysopen.mjs` 3, `ui-timer.mjs` 28.
