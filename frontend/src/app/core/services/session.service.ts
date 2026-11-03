@@ -32,6 +32,8 @@ export interface StudyLoginResponse {
   /** Whether this participant is a fixed, repeatable-use test participant — false/absent for
    *  every real participant, who only ever reached this response via a personal link. */
   isTestParticipant?: boolean;
+  /** false = the researcher hides the BeyondAI logo / name from participants of this research. */
+  showBranding?: boolean;
 }
 
 export interface StartReviewResponse {

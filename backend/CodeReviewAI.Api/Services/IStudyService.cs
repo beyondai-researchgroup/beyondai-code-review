@@ -63,6 +63,7 @@ namespace CodeReviewAI.Api.Services;
 /// the participant-facing banner for this has no external link, just a "wait for your
 /// researcher" message.
 /// </param>
+// ShowBranding: Research.ShowBeyondAiBranding — false hides the BeyondAI logo / name from this research's participants (the frontend reads it from the login answer).
 public record StudyLoginState(
     bool ParticipantExists,
     int? SessionId,
@@ -74,7 +75,8 @@ public record StudyLoginState(
     bool NotApplicable = false,
     int? TimerMinutes = null,
     bool IsTestParticipant = false,
-    bool BaselineRequired = false);
+    bool BaselineRequired = false,
+    bool ShowBranding = true);
 
 /// <summary>
 /// Resolved demo-PR configuration for a participant's research (from the

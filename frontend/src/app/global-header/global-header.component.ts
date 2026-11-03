@@ -1,6 +1,7 @@
 import { Component, computed, inject, input } from '@angular/core';
 import { I18nService } from '../core/services/i18n.service';
 import { ThemeService } from '../core/services/theme.service';
+import { BrandingService } from '../core/services/branding.service';
 
 /**
  * Shared top nav bar — structurally uniform with the sibling study apps' own
@@ -19,12 +20,16 @@ import { ThemeService } from '../core/services/theme.service';
   template: `
     <header class="global-header">
       <div class="header-brand">
-        <div class="brand-logo-wrap">
-          <img [src]="logoSrc()" alt="BeyondAI logo" class="brand-logo" aria-hidden="true" />
-        </div>
-        <span class="brand-name">BeyondAI Research Group</span>
+        @if (branding.visible()) {
+          <div class="brand-logo-wrap">
+            <img [src]="logoSrc()" alt="BeyondAI logo" class="brand-logo" aria-hidden="true" />
+          </div>
+          <span class="brand-name">BeyondAI Research Group</span>
+        }
         @if (prTitle()) {
-          <span class="header-divider" aria-hidden="true"></span>
+          @if (branding.visible()) {
+            <span class="header-divider" aria-hidden="true"></span>
+          }
           <span class="pr-title">{{ prTitle() }}</span>
         }
       </div>
@@ -175,6 +180,7 @@ import { ThemeService } from '../core/services/theme.service';
 export class GlobalHeaderComponent {
   readonly i18n = inject(I18nService);
   readonly themeService = inject(ThemeService);
+  readonly branding = inject(BrandingService);
 
   /** Breadcrumb shown next to the brand once a review session is active — null/absent elsewhere. */
   readonly prTitle = input<string | null>(null);

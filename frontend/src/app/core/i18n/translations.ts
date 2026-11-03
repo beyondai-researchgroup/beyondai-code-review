@@ -118,6 +118,8 @@ export interface Translations {
     skip: string;
     done: string;
     welcomeTitle: string;
+    /** Same step when the research hides the BeyondAI branding. */
+    welcomeTitleNeutral: string;
     welcomeBody: string;
     fileListTitle: string;
     fileListBody: string;
@@ -265,6 +267,7 @@ export const translations: Record<Lang, Translations> = {
       skip: 'Preskoči tur',
       done: 'Razumem, hoću sam da probam',
       welcomeTitle: 'Dobrodošli u BeyondAI',
+      welcomeTitleNeutral: 'Dobrodošli',
       welcomeBody: 'Ovaj kratak vodič će vas provesti kroz sve delove aplikacije koje ćete koristiti tokom pregleda Pull Requesta. Kliknite „Dalje" da nastavite, ili „Preskoči tur" ako želite odmah sami da istražujete.',
       fileListTitle: 'Lista izmenjenih fajlova',
       fileListBody: 'Ovde vidite sve fajlove koje ovaj Pull Request menja. Kliknite na fajl da otvorite njegove izmene (diff) u srednjem panelu.',
@@ -410,6 +413,7 @@ export const translations: Record<Lang, Translations> = {
       skip: 'Skip tour',
       done: 'Got it, let me try it myself',
       welcomeTitle: 'Welcome to BeyondAI',
+      welcomeTitleNeutral: 'Welcome',
       welcomeBody: 'This short guide will walk you through every part of the app you\'ll use while reviewing a Pull Request. Click "Next" to continue, or "Skip tour" to explore on your own right away.',
       fileListTitle: 'Changed files list',
       fileListBody: 'Here you see every file this Pull Request changes. Click a file to open its changes (diff) in the middle panel.',

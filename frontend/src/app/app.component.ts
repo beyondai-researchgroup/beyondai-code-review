@@ -15,6 +15,7 @@ import { SessionService } from './core/services/session.service';
 import { StudyStateService } from './core/services/study-state.service';
 import { I18nService } from './core/services/i18n.service';
 import { ThemeService } from './core/services/theme.service';
+import { BrandingService } from './core/services/branding.service';
 import { TourService, TourStep } from './core/services/tour.service';
 import { PrFile } from './core/models/pr-file.model';
 import { ReviewMode } from './core/models/review-mode.model';
@@ -34,6 +35,7 @@ export class AppComponent {
   private readonly tourService = inject(TourService);
   readonly i18n = inject(I18nService);
   readonly themeService = inject(ThemeService);
+  private readonly branding = inject(BrandingService);
   readonly t = this.i18n.t;
 
   readonly ReviewMode = ReviewMode;
@@ -352,7 +354,7 @@ export class AppComponent {
       {
         target: null,
         placement: 'center',
-        title: tt.welcomeTitle,
+        title: this.branding.visible() ? tt.welcomeTitle : tt.welcomeTitleNeutral,
         body: tt.welcomeBody,
         beforeShow: () => { expandPanels(); this.showDescription.set(false); },
       },

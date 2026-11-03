@@ -121,17 +121,17 @@ internal static class StudyEndpoints
         // whole study flow, same as AllFinished blocks it at the other end — the frontend shows
         // a message + link to the Consent app instead of the mode-choice screen.
         if (state.ConsentRequired)
-            return Results.Ok(new { allFinished = false, consentRequired = true });
+            return Results.Ok(new { allFinished = false, consentRequired = true, showBranding = state.ShowBranding });
 
         // First experimental session (SequenceOrder = 2) is blocked until the researcher has
         // marked the baseline (EEG) measurement done in the Admin Dashboard — nothing
         // participant-facing to do about it, so the frontend shows a plain "wait for your
         // researcher" message instead of the mode-choice screen.
         if (state.BaselineRequired)
-            return Results.Ok(new { allFinished = false, baselineRequired = true });
+            return Results.Ok(new { allFinished = false, baselineRequired = true, showBranding = state.ShowBranding });
 
         if (state.AllFinished)
-            return Results.Ok(new { allFinished = true });
+            return Results.Ok(new { allFinished = true, showBranding = state.ShowBranding });
 
         // Intro (session 1) is the first login of the study — (re)start EEG recording.
         // Any later login (returning for session 2/3) just resumes after the between-session pause.
@@ -155,7 +155,9 @@ internal static class StudyEndpoints
             // starts the countdown once the review itself opens (see StartReview's own response
             // below), not on this mode-choice screen; returned here too just for shape parity.
             timerMinutes = state.TimerMinutes,
-            isTestParticipant = state.IsTestParticipant
+            isTestParticipant = state.IsTestParticipant,
+            // false = the researcher hides the BeyondAI logo / name from participants of this research.
+            showBranding = state.ShowBranding
         });
     }
 

@@ -51,12 +51,14 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
         int? testFixedSessionId;
         bool baselineDone;
         bool isProtocolResearch;
+        bool showBranding;
         await using (var infoCmd = new NpgsqlCommand(
             """
             SELECT p."Language", p."ConsentGivenAt", COALESCE(r."UsesConsentForm", TRUE), COALESCE(r."TaskType", 'PR_REVIEW'),
                    CASE WHEN r."TimerCodeReviewEnabled" THEN r."TimerCodeReviewMinutes" ELSE NULL END,
                    p."IsTestParticipant", p."TestFixedSessionId", p."BaselineDoneAt",
-                   COALESCE(r."FlowMode", 'CLASSIC') = 'PROTOCOL'
+                   COALESCE(r."FlowMode", 'CLASSIC') = 'PROTOCOL',
+                   COALESCE(r."ShowBeyondAiBranding", TRUE)
             FROM "Participant" p
             LEFT JOIN "Research" r ON r."Id" = p."ResearchId"
             WHERE p."ParticipantId" = @pid
@@ -76,6 +78,7 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
             testFixedSessionId = await infoReader.IsDBNullAsync(6, ct) ? null : infoReader.GetInt32(6);
             baselineDone = !await infoReader.IsDBNullAsync(7, ct);
             isProtocolResearch = infoReader.GetBoolean(8);
+            showBranding = infoReader.GetBoolean(9);
 
             // Item 1 of the "platform improvements round 2" plan — ParticipantId is scoped per
             // research now, not globally unique, and this login form still takes only a bare id
@@ -92,7 +95,7 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
         // that was never meant for their study. Defense in depth: such a participant is never told
         // to open this app in normal operation.
         if (!string.Equals(taskType, "PR_REVIEW", StringComparison.OrdinalIgnoreCase))
-            return new StudyLoginState(true, null, null, false, false, language, NotApplicable: true);
+            return new StudyLoginState(true, null, null, false, false, language, NotApplicable: true, ShowBranding: showBranding);
 
         // Fixed test participants (Participant.IsTestParticipant + TestFixedSessionId) always
         // land on the one session TestFixedSessionId pins them to — regardless of their actual
@@ -103,7 +106,7 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
         if (isTestParticipant && testFixedSessionId is not null)
         {
             var sessionId = testFixedSessionId.Value;
-            return new StudyLoginState(true, sessionId, SessionNamesById[sessionId], false, false, language, IsTestParticipant: true, TimerMinutes: timerMinutes);
+            return new StudyLoginState(true, sessionId, SessionNamesById[sessionId], false, false, language, IsTestParticipant: true, TimerMinutes: timerMinutes, ShowBranding: showBranding);
         }
 
         // A test participant WITHOUT a fixed session is a "cycling" one (e.g. 005): they walk their
@@ -130,11 +133,11 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
             var (cycleSessionId, cycleSessionName) = next is null
                 ? (1, SessionNamesById[1])
                 : (next.Value.SessionId, next.Value.Name);
-            return new StudyLoginState(true, cycleSessionId, cycleSessionName, false, false, language, IsTestParticipant: true, TimerMinutes: timerMinutes);
+            return new StudyLoginState(true, cycleSessionId, cycleSessionName, false, false, language, IsTestParticipant: true, TimerMinutes: timerMinutes, ShowBranding: showBranding);
         }
 
         if (usesConsentForm && !consentGiven)
-            return new StudyLoginState(true, null, null, false, true, language);
+            return new StudyLoginState(true, null, null, false, true, language, ShowBranding: showBranding);
 
         await using var nextCmd = new NpgsqlCommand(
             """
@@ -149,7 +152,7 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
 
         await using var reader = await nextCmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
-            return new StudyLoginState(true, null, null, true, false, language);
+            return new StudyLoginState(true, null, null, true, false, language, ShowBranding: showBranding);
 
         var nextSessionId = reader.GetInt32(0);
         var nextSessionName = reader.GetString(1);
@@ -163,9 +166,9 @@ internal sealed class StudyService : IStudyService, IAsyncDisposable
         // The baseline (EEG) gate belongs to the original study. A protocol research has no baseline step: its
         // Code Review step creates the sessions itself and the protocol decides when the participant is sent here.
         if (effectiveSequence == 2 && !baselineDone && !isProtocolResearch)
-            return new StudyLoginState(true, null, null, false, false, language, BaselineRequired: true);
+            return new StudyLoginState(true, null, null, false, false, language, BaselineRequired: true, ShowBranding: showBranding);
 
-        return new StudyLoginState(true, nextSessionId, nextSessionName, false, false, language, TimerMinutes: timerMinutes);
+        return new StudyLoginState(true, nextSessionId, nextSessionName, false, false, language, TimerMinutes: timerMinutes, ShowBranding: showBranding);
     }
 
     /// <summary>

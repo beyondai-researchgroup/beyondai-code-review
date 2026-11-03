@@ -1,6 +1,8 @@
 <div class="loader-card">
   <div class="loader-brand">
-    <img [src]="logoSrc()" alt="BeyondAI logo" class="loader-logo" aria-hidden="true">
+    @if (branding.visible()) {
+      <img [src]="logoSrc()" alt="BeyondAI logo" class="loader-logo" aria-hidden="true">
+    }
     <!-- Branding text hidden for the research deployment - the study should stay blind to
          which tool/vendor this is. Uncomment if a non-study build needs it back.
     <h1 class="loader-title">BeyondAI</h1>

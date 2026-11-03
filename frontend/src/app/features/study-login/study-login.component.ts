@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { environment } from '../../../environments/environment';
 import { SessionService, StudyLoginResponse } from '../../core/services/session.service';
 import { StudyStateService } from '../../core/services/study-state.service';
+import { BrandingService } from '../../core/services/branding.service';
 import { I18nService } from '../../core/services/i18n.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { ReviewMode } from '../../core/models/review-mode.model';
@@ -31,6 +32,7 @@ export class StudyLoginComponent {
 
   private readonly sessionService = inject(SessionService);
   private readonly studyState = inject(StudyStateService);
+  readonly branding = inject(BrandingService);
   readonly i18n = inject(I18nService);
   private readonly themeService = inject(ThemeService);
   readonly t = this.i18n.t;
@@ -129,6 +131,8 @@ export class StudyLoginComponent {
   }
 
   private handleLoginResponse(res: StudyLoginResponse, id: string, linkToken: string | null): void {
+    // Whether this research shows the BeyondAI logo / name (carried by every login answer).
+    if (res.showBranding !== undefined) this.branding.set(res.showBranding !== false);
     if (res.consentRequired) {
       this.loading.set(false);
       this.resolvingLink.set(false);
