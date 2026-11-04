@@ -3729,3 +3729,13 @@ All new admin routes are PROTOCOL-only (`NOT_PROTOCOL` otherwise); research 1/10
 - `forms-andrejkatin/server.mjs` `resolveStepLink`: pri svakom otvaranju linka bira upitnik po `Participant.GroupId` (isti link, isti korak; i predaja i dalje proverava stavke tog upitnika). Odgovori se čuvaju sa `QuestionnaireId` koji je ispitanik stvarno popunio, pa su Rezultati po upitniku odvojeni (kolona Grupa).
 - Admin UI: u koraku UPITNIK "Upitnik po grupi (opciono)" (jedan red po grupi, "Isti kao podrazumevani"), prikazuje se samo kad istraživanje ima grupe i bar dva upitnika; onemogućeno kad je korak zaključan.
 - Verifikovano: `qbygroup-test.mjs` 22 provere (validacija, čuvanje, forms link po grupi, predaja, rezultati, brisanje, zaključavanje, nijedan odgovor izgubljen), `ui-qbygroup.mjs` 9 provera (urednik, autosave, reload, zaključan korak).
+
+### Upitnik: naslovi sekcija, pregled, prekidač "po grupi" (2026-11-04, local only until migration 048 is applied to Neon)
+
+- **Naslov sekcije** je nov tip stavke `HEADING` u `QuestionnaireItem` (naslov u `PromptSr/PromptEn`, bez odgovora, `Required` uvek FALSE). Traži `Sql/048_questionnaire_heading.sql` (samo proširuje CHECK na `ItemType`, ne dira redove, idempotentna;
+  primenjena na lokalnu bazu, NE na Neon dok korisnik ne odobri). Admin: dugme "+ Dodaj naslov sekcije" u uredniku upitnika; naslov se uvek može obrisati čak i kad upitnik ima odgovore. Rezultati, statistika, CSV i broj stavki
+  ignorišu naslove (`ItemType <> 'HEADING'`). Forms: `validateAnswers` preskače naslove (odgovor na naslov je `UNKNOWN_ITEM`), stranica ispitanika ih prikazuje kao naslov (`.section-title`), predaja ih ne računa.
+- **Pregled** u uredniku upitnika: dugme "Pregled" otvara prozor sa onim što vidi ispitanik, uključujući nesačuvane izmene, SR/EN prekidač, dugmad se mogu probati, ništa se ne čuva.
+- **Prekidač "Različit upitnik po grupi"** u koraku UPITNIK: kad je uključen nestaje jedinstvena padajuća lista i ostaje po jedna po grupi (`Config.byGroup = true`, `questionnaireByGroup` ima unos za svaku grupu, i onaj jednak
+  `QuestionnaireId`); `QuestionnaireId` koraka prati upitnik prve grupe. Izbor sačuvan pre prekidača (samo `questionnaireByGroup`) se prepoznaje kao uključen režim. Isključivanje briše izbor po grupi.
+- Verifikovano: `heading-test.mjs` (API, 18 provera), `ui-heading.mjs` (pregledač, 19 provera), `qbygroup-test.mjs` (22) i produkcijski build admina i forms-a. `ui-qbygroup.mjs` je zastareo (očekuje stari izgled bez prekidača).
