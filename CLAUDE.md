@@ -3712,3 +3712,10 @@ All new admin routes are PROTOCOL-only (`NOT_PROTOCOL` otherwise); research 1/10
 - **Stanje rada** na listi učesnika (korak sa Tabelama): `activity` NOT_OPENED / STARTED / WORKING / SUBMITTED / TIMED_OUT (iz `SheetAccessLink.RulesAcknowledgedAt` i `SheetEntry`), ikone ● ▸ ✎ ✓ i tekst na stranici učesnika.
 - **Izgled tabele učesnika**: nema unutrašnjeg prozora sa skrolom, skroluje se cela strana; tajmer je gore levo u traci koja ostaje vidljiva, zaglavlje kolona ostaje ispod nje (`--fill-sticky-top`).
 - Verifikovano: `minopen-test.mjs` 46 provera (pravi admin, sheets i forms API na kopiji baze, lažni relej), `ui-minlayout.mjs` 12, `ui-alwaysopen.mjs` 3, `ui-timer.mjs` 28.
+
+### Podrazumevana tema učesnika je svetla (2026-11-04)
+
+- Sve aplikacije koje ispitanik otvara preko linka (consent, forms, sheets, task, demographics, REI-40, Big Five, NASA-TLX, Code Review) počinju na svetloj temi: `data-theme="light"` u `index.html`, `ThemeService` vraća svetlu kad nema izbora.
+  Ključ u `localStorage` je dobio sufiks `-v2` (npr. `taskapp-theme-v2`, `tlx-theme-v2`, `theme-v2`), pa se ranije sačuvan izbor ne prenosi; kasniji izbor tamne teme se pamti. Admin dashboard je nepromenjen.
+- Tekst u mejlu za zadatak ne sme da otkriva vrstu zadatka: obaveštenje o prozoru dostupnosti kaže "zadatak", ne "tabela" (`protocolStepEmail.mjs`). Mejlovi za pristanak, zadatak i upitnik imaju svoj naslov i dugme
+  (`KIND_COPY`), ostali koraci (REI-40, Big Five, NASA-TLX) ostaju generički. U tamnoj temi boja teksta pristanka pobeđuje bojom ugrađenom iz Worda (`.consent-body [style*='color']`, globalni stil u forms i consent).

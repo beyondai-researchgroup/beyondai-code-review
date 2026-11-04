@@ -5,7 +5,7 @@ export type Theme = 'dark' | 'light';
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
   readonly theme = signal<Theme>(
-    (localStorage.getItem('theme') as Theme | null) ?? 'dark'
+    (localStorage.getItem('theme-v2') as Theme | null) ?? 'light'
   );
 
   constructor() {
@@ -14,7 +14,7 @@ export class ThemeService {
     effect(() => {
       const t = this.theme();
       document.documentElement.setAttribute('data-theme', t);
-      localStorage.setItem('theme', t);
+      localStorage.setItem('theme-v2', t);
     });
   }
 
