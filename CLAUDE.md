@@ -3719,3 +3719,13 @@ All new admin routes are PROTOCOL-only (`NOT_PROTOCOL` otherwise); research 1/10
   Ključ u `localStorage` je dobio sufiks `-v2` (npr. `taskapp-theme-v2`, `tlx-theme-v2`, `theme-v2`), pa se ranije sačuvan izbor ne prenosi; kasniji izbor tamne teme se pamti. Admin dashboard je nepromenjen.
 - Tekst u mejlu za zadatak ne sme da otkriva vrstu zadatka: obaveštenje o prozoru dostupnosti kaže "zadatak", ne "tabela" (`protocolStepEmail.mjs`). Mejlovi za pristanak, zadatak i upitnik imaju svoj naslov i dugme
   (`KIND_COPY`), ostali koraci (REI-40, Big Five, NASA-TLX) ostaju generički. U tamnoj temi boja teksta pristanka pobeđuje bojom ugrađenom iz Worda (`.consent-body [style*='color']`, globalni stil u forms i consent).
+
+### Upitnik po grupi u koraku UPITNIK (2026-11-04, local only — not deployed)
+
+- Korak protokola UPITNIK ima podrazumevani upitnik (`QuestionnaireId`) i opcioni izbor po grupi u `Config.questionnaireByGroup = [{groupId, questionnaireId}]` (bez promene šeme, bez migracije).
+  Grupa bez izbora i učesnik bez grupe dobijaju podrazumevani. Unos jednak podrazumevanom se pri čuvanju briše, niz je sortiran po grupi.
+- `server/protocol/routes.mjs`: grupa i upitnik moraju pripadati istraživanju, grupa se ne ponavlja, samo korak UPITNIK sme da ima izbor po grupi. Zaključavanje: kad bilo ko dobije korak, podrazumevani i izbori po grupi se ne menjaju (`PROTOCOL_LOCKED`),
+  ostale izmene koraka (naziv, tekst mejla) prolaze. Upitnik koji je izabran samo za grupu računa se kao korišćen (lista upitnika, brisanje `QUESTIONNAIRE_IN_USE`, lista i koraci u Rezultatima).
+- `forms-andrejkatin/server.mjs` `resolveStepLink`: pri svakom otvaranju linka bira upitnik po `Participant.GroupId` (isti link, isti korak; i predaja i dalje proverava stavke tog upitnika). Odgovori se čuvaju sa `QuestionnaireId` koji je ispitanik stvarno popunio, pa su Rezultati po upitniku odvojeni (kolona Grupa).
+- Admin UI: u koraku UPITNIK "Upitnik po grupi (opciono)" (jedan red po grupi, "Isti kao podrazumevani"), prikazuje se samo kad istraživanje ima grupe i bar dva upitnika; onemogućeno kad je korak zaključan.
+- Verifikovano: `qbygroup-test.mjs` 22 provere (validacija, čuvanje, forms link po grupi, predaja, rezultati, brisanje, zaključavanje, nijedan odgovor izgubljen), `ui-qbygroup.mjs` 9 provera (urednik, autosave, reload, zaključan korak).
