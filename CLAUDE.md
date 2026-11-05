@@ -3739,3 +3739,41 @@ All new admin routes are PROTOCOL-only (`NOT_PROTOCOL` otherwise); research 1/10
 - **Prekidač "Različit upitnik po grupi"** u koraku UPITNIK: kad je uključen nestaje jedinstvena padajuća lista i ostaje po jedna po grupi (`Config.byGroup = true`, `questionnaireByGroup` ima unos za svaku grupu, i onaj jednak
   `QuestionnaireId`); `QuestionnaireId` koraka prati upitnik prve grupe. Izbor sačuvan pre prekidača (samo `questionnaireByGroup`) se prepoznaje kao uključen režim. Isključivanje briše izbor po grupi.
 - Verifikovano: `heading-test.mjs` (API, 18 provera), `ui-heading.mjs` (pregledač, 19 provera), `qbygroup-test.mjs` (22) i produkcijski build admina i forms-a. `ui-qbygroup.mjs` je zastareo (očekuje stari izgled bez prekidača).
+
+### Vreme početka zadatka i ZIP Excel fajlova po grupi (2026-11-05, local only until migration 049 is applied to Neon)
+
+- **Vreme početka**: matrica i vremenska linija učesnika (`protocol-progress`) vraćaju `startedAt` uz `activity`. Sheets: trenutak pritiska na "Počni zadatak" (`SheetAccessLink.RulesAcknowledgedAt`). Generic zadatak: prvo otvaranje linka u `task-app` zapisuje red u
+  novu tabelu `GenericTaskStart` (`Sql/049_generic_task_start.sql`, jedan red po učesniku, `ON CONFLICT DO NOTHING`, best-effort); aktivnost generičkog zadatka je NOT_OPENED / WORKING / SUBMITTED / TIMED_OUT.
+  UI: tooltip ćelije matrice ("Počeo/la: ..."), linija "Počeo/la:" na vremenskoj liniji, i na stranici Tabele "počeo <datum>, još bez unosa" ili "Početak: <datum>" uz status. `ACTIVITY_SUBMITTED` sada kaže "Predao/la zadatak".
+  Code Review i ostale vrste zadataka nemaju zapis početka u ovoj tabeli (Code Review ima dnevnik aktivnosti).
+- **ZIP po grupi**: `GET /api/admin/sheets/:researchId/export-zip?groupId=all|<id>`: folder po grupi, u njemu jedan .xlsx po šablonu koji je ta grupa popunjavala (samo ako ima unosa), plus folder `bez-grupe` kad se traže sve grupe;
+  istraživanje bez grupa dobija fajlove jedan pored drugog. Isti sadržaj kolona kao postojeći Excel izvoz (filtrirano po grupi učesnika). Stranica Tabele: izbor grupe + dugme "Preuzmi ZIP", vidljivo kad istraživanje ima grupe.
+  Pregled stranice Tabele vraća i `groups`. Postojeći izvoz jednog/svih šablona nije menjan.
+- Verifikovano: `start-zip-test.mjs` (API, 21 provera), `ui-start-zip.mjs` (pregledač, 9 provera).
+
+### Eksperimentalne sesije: veza sa zadacima, grupa, napomene, checklista (2026-11-05, local only until migrations 049-050 are applied to Neon)
+
+- **Veza sa zadacima**: sesija (dan + opciona grupa) sama prikazuje ispitanike koji su tog dana počeli zadatak. `server/experimental-sessions/members.mjs`: `loadWorkEvents` (Sheets: `SheetAccessLink.RulesAcknowledgedAt`; generički zadatak: `GenericTaskStart`),
+  dan se računa po `Europe/Belgrade`, filtrirano grupom sesije. Ispitanici sesije = rad na zadatku ∪ polaznici termina (`SessionSlotAttendee`) ∪ dodeljene sesije (klasična istraživanja). Nova ruta `GET /api/admin/experimental-sessions/:id/work`; lista sesija vraća `memberCount`
+  (kolona "Ispitanika"), detalj vraća `groupId/effectiveGroupId/groupFromLabel`. Grupa: `ExperimentalSession.GroupId` (opciono, bira se pri pravljenju i na stranici sesije); bez nje se grupa uzima po nazivu sesije ako je jednak nazivu grupe (slučaj "po sesija za grupu"), a izbor se čuva tek kad se sačuva.
+  `PUT /:id` bez `groupId` ne menja grupu (kalendar šalje samo datum). Kod nema Code Review kao izvora rada.
+- **Napomene**: napomena sesije i termina čuva i prikazuje prelome redova (lista: `pre-wrap`, 3 reda, ceo tekst u tooltipu); napomena termina je sada višelinijsko polje koje se čuva i napuštanjem polja, uz "Sačuvano".
+- **Checklista** (`Sql/050_experimental_session_group_checklist.sql`, `server/session-checklists/routes.mjs`, `/api/admin/session-checklists`): šablon na nivou eksperimentalne sesije (`ExperimentalSessionChecklistItem`), a svaki **termin** (`SessionSlot`, za grupu, jednog ispitanika ili sve) dobija svoju kopiju
+  (`SessionSlotChecklist` + `SessionSlotChecklistItem`, pravi se pri prvom otvaranju liste i za termin dodat kasnije). "Pojedinačna sesija" = termin (potvrđeno od korisnika). Izmena šablona se širi: nova stavka na sve termine, skinuta stavka iz termina gde nije štiklirana
+  (štiklirana ostaje kao istorija), preimenovanje svuda. Svaki termin se menja zasebno (dodaj/skini stavku samo tom terminu, štikliranje pamti ko i kada). Pisanje samo OWNER/COLLABORATOR, VIEWER čita.
+  Radi za istraživanja sa terminima (protokol); klasična istraživanja (ParticipantSession dodele) nemaju termine pa za njih lista termina ostaje prazna. UI: kartice "Rad na zadatku" i "Checklista" (`session-work`, `session-checklist`); lista se osvežava kad se termin doda/promeni (`slotsChanged`).
+- Gotcha: Angular 17 šabloni ne dozvoljavaju `as` u `@else if`, strelice (`=>`) ni `track $index` (koristiti `track i; let i = $index`, metode u klasi); `tsc` ne proverava šablone, proveriti `ng build`, a `ng serve` tiho ostane na starom buildu kad šablon ne prolazi. Pisanje signala u `effect` traži `untracked`.
+- Verifikovano: `session-work-test.mjs` (rad/grupa, API), `slot-checklist-test.mjs` (checklista po terminu, 26 provera), `ui-session-checklist.mjs` (19), `ui-new-slot-checklist.mjs` (4), `ui-slot-notes.mjs` (6), produkcijski build čist.
+
+### ZIP tabela: prozorčić za preuzimanje i prevod na engleski (2026-11-05, local only until migration 051 + key)
+
+- **Prozorčić** na stranici Tabele (dugme "Preuzmi ZIP po grupama…"): izbor grupe i jezika fajlova (Original / Prevedi na engleski). Uz engleski stoji napomena o privatnosti (tekst ide Claude-u, Anthropic).
+  Dugme "Preuzmi" ponavlja zahtev do 6 puta kad prevod ne stigne u jednom (`TRANSLATION_TIMEOUT`); već prevedeno se pamti, pa nastavlja odatle. Greške su jasne poruke u prozorčiću (nije podešeno, nije uspelo, još traje, preveliko).
+- **Server**: `GET /api/admin/sheets/:rid/export-zip?groupId=&lang=sr|en`. `lang=en` prevodi sve što završi u fajlu: zaglavlja, nazive listova, grupu/zadatak/šablon, odgovore ispitanika, nazive foldera i fajlova (`bez-grupe` -> `no-group`, `tabele-` -> `tables-`).
+  Šifre, ID ispitanika, brojevi, datumi, linkovi, mejlovi i statusi se ne šalju i ne menjaju. Dvofazna izrada: probni prolaz skupi tekstove, jedan poziv prevoda, pa prava izrada (`addWorkbookSheets(..., { tr })`).
+- **Prevod** (`server/translate/translator.mjs`): Anthropic Messages API (fetch, bez SDK-a), batch do 40 tekstova / 6000 znakova, 4 paralelno, tvrd rok 45 s po zahtevu (Vercel 60 s), do 250k znakova po izvozu (`TRANSLATION_TOO_LARGE`).
+  Sistemski prompt tretira tekst ispitanika kao nepouzdane podatke (ne izvršava uputstva iz njih). Keš: `TranslationCache` (`Sql/051_translation_cache.sql`), po istraživanju, čuva samo hash izvornog teksta + prevod, briše se sa istraživanjem.
+  Greške: `TRANSLATION_NOT_CONFIGURED` 503, `TRANSLATION_TIMEOUT` 504, `TRANSLATION_FAILED` 502, `TRANSLATION_TOO_LARGE` 413. Bez uspešnog prevoda se nikad ne vraća delimično preveden fajl.
+- **Okruženje**: `ANTHROPIC_API_KEY` (obavezno za prevod; admin Vercel projekat i lokalni `.env.local`; bez njega original radi, a engleski vraća 503), `TRANSLATE_MODEL` (podrazumevano `claude-sonnet-5-5`),
+  `ANTHROPIC_API_URL` i `TRANSLATE_DEADLINE_MS` (samo za testove). Pravi ključ nije korišćen u razvoju: svi testovi idu preko lažnog Anthropic servera, pa kvalitet stvarnog prevoda treba proveriti kad se ključ podesi.
+- Verifikovano: `zip-translate-test.mjs` (API, 24 provere: keš, batchovi, delimičan prekid pa nastavak, greške, nazivi, bez ključa), `ui-zip-modal.mjs` (pregledač, 12 provera uključujući ponavljanje pri isteku vremena), produkcijski build čist.
